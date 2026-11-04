@@ -1,6 +1,9 @@
 #pragma once
 
 #include "SceTypes.hpp"
+#include "prx/libcairo/include/Matrix.hpp"
+
+struct CairoPattern;
 
 extern "C" {
 
@@ -13,16 +16,14 @@ int APS5_VABI cairo_stroke_extents();
 int APS5_VABI cairo_image_surface_create_from_png_stream();
 int APS5_VABI cairo_ft_scaled_font_lock_face();
 int APS5_VABI cairo_glyph_path();
-int APS5_VABI cairo_set_source_rgb();
 int APS5_VABI cairo_scaled_font_destroy();
-int APS5_VABI cairo_pattern_reference();
+CairoPattern* APS5_VABI cairo_pattern_reference(CairoPattern* pattern);
 int APS5_VABI cairo_scaled_font_get_font_options();
 int APS5_VABI cairo_in_stroke();
 int APS5_VABI cairo_scaled_font_get_ctm();
 int APS5_VABI cairo_set_font_size();
 int APS5_VABI cairo_surface_write_to_png_stream();
-int APS5_VABI cairo_pattern_set_extend();
-int APS5_VABI cairo_set_source_rgba();
+void APS5_VABI cairo_pattern_set_extend(CairoPattern* pattern, int extend);
 int APS5_VABI cairo_ft_font_face_create_for_pattern();
 int APS5_VABI cairo_mask();
 int APS5_VABI cairo_scaled_font_extents();
@@ -34,7 +35,7 @@ int APS5_VABI cairo_region_get_rectangle();
 int APS5_VABI cairo_font_options_set_hint_style();
 int APS5_VABI cairo_font_face_destroy();
 int APS5_VABI cairo_scaled_font_text_extents();
-int APS5_VABI cairo_pattern_create_linear();
+CairoPattern* APS5_VABI cairo_pattern_create_linear(double x0, double y0, double x1, double y1);
 int APS5_VABI cairo_clip_extents();
 int APS5_VABI cairo_set_scaled_font();
 int APS5_VABI cairo_region_create();
@@ -43,7 +44,6 @@ int APS5_VABI cairo_pop_group_to_source();
 int APS5_VABI cairo_mesh_pattern_set_corner_color_rgba();
 int APS5_VABI cairo_font_options_copy();
 int APS5_VABI cairo_clip();
-int APS5_VABI cairo_pattern_create_for_surface();
 int APS5_VABI cairo_stroke_preserve();
 int APS5_VABI cairo_ft_scaled_font_unlock_face();
 int APS5_VABI cairo_font_options_get_antialias();
@@ -55,17 +55,16 @@ int APS5_VABI cairo_region_union_rectangle();
 int APS5_VABI cairo_region_reference();
 int APS5_VABI cairo_scaled_font_status();
 int APS5_VABI cairo_in_fill();
-int APS5_VABI cairo_set_source();
 int APS5_VABI cairo_font_face_get_user_data();
 int APS5_VABI cairo_pattern_create_mesh();
 int APS5_VABI cairo_stroke();
 int APS5_VABI cairo_fill_preserve();
 int APS5_VABI cairo_fill_extents();
 int APS5_VABI cairo_ft_font_face_create_for_ft_face();
-int APS5_VABI cairo_pattern_destroy();
-int APS5_VABI cairo_pattern_set_matrix();
+void APS5_VABI cairo_pattern_destroy(CairoPattern* pattern);
+void APS5_VABI cairo_pattern_set_matrix(CairoPattern* pattern, const CairoMatrix* matrix);
 int APS5_VABI cairo_surface_set_user_data();
-int APS5_VABI cairo_pattern_set_filter();
+void APS5_VABI cairo_pattern_set_filter(CairoPattern* pattern, int filter);
 int APS5_VABI cairo_push_group();
 int APS5_VABI cairo_font_options_destroy();
 int APS5_VABI cairo_ft_font_options_substitute();
@@ -81,11 +80,10 @@ int APS5_VABI cairo_font_options_set_subpixel_order();
 int APS5_VABI cairo_show_text();
 int APS5_VABI cairo_set_font_face();
 int APS5_VABI cairo_scaled_font_create();
-int APS5_VABI cairo_pattern_create_radial();
-int APS5_VABI cairo_set_source_surface();
+CairoPattern* APS5_VABI cairo_pattern_create_radial(double cx0, double cy0, double radius0, double cx1, double cy1, double radius1);
 int APS5_VABI cairo_region_destroy();
 int APS5_VABI cairo_device_destroy();
-int APS5_VABI cairo_pattern_add_color_stop_rgba();
+void APS5_VABI cairo_pattern_add_color_stop_rgba(CairoPattern* pattern, double offset, double red, double green, double blue, double alpha);
 int APS5_VABI cairo_region_num_rectangles();
 
 }
