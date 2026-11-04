@@ -20,9 +20,13 @@
 
 - [Mesh pattern construction](../../../core/libs/prx/libcairo/Patterns.cpp) combines seven guest-callable exports with gradient, solid and surface patterns. Mesh patches hold 4×4 tensor-product control points, support cubic/straight sides and automatic closure, clamp corner RGBA, and produce sticky construction errors. A native Cairo 1.18.0 differential covers completed paths, colors, errors and Coons interior controls, but PS5 behavior and rendering are not verified. The missing mesh inspection exports are not part of this firmware catalogue.
 
+- [FontOptions.cpp](../../../core/libs/prx/libcairo/FontOptions.cpp) provides eight typed font-option lifecycle and state exports with independent copies, enum values and a protected nil object; font rendering remains unsupported.
+
+- [Region.cpp](../../../core/libs/prx/libcairo/Region.cpp) provides six typed region lifecycle and rectangle-union exports, with canonical band geometry and sticky size errors. Its original branch verified behavior against native Cairo/Pixman regions.
+
 ### Callable exports
 
-- [Callable exports](../../../core/libs/prx/libcairo/Export.cpp) - 63 NIDs still throw; the complete table below also includes implemented exports. The map matches the [public 3.20 catalogue](https://github.com/DNNDHH/PS5-3.20_Libs/blob/b2a77c09cd71c01f34c790cfbe98c751a13262ad/libcairo.c) and [selected export metadata](https://gist.github.com/kyon-eth/a0bb48f2b3070a5eac8a638810f195f2/a3838ac54ebcc0bbfeb3cc46002a9a2dcce4dbdc) from two version-labelled images (SHA-256 `ec2158e0c5875316d200037d7f4bc48861626451752523f6930d687307c75ef8`). The labels are not authenticated; unsupported functions still throw through `NotImplemented_nid_no_patch`, and their prototypes and behavior remain unverified.
+- [Callable exports](../../../core/libs/prx/libcairo/Export.cpp) - 49 NIDs still throw; the complete table below also includes implemented exports. The map matches the [public 3.20 catalogue](https://github.com/DNNDHH/PS5-3.20_Libs/blob/b2a77c09cd71c01f34c790cfbe98c751a13262ad/libcairo.c) and [selected export metadata](https://gist.github.com/kyon-eth/a0bb48f2b3070a5eac8a638810f195f2/a3838ac54ebcc0bbfeb3cc46002a9a2dcce4dbdc) from two version-labelled images (SHA-256 `ec2158e0c5875316d200037d7f4bc48861626451752523f6930d687307c75ef8`). The labels are not authenticated; unsupported functions still throw through `NotImplemented_nid_no_patch`, and their prototypes and behavior remain unverified.
 
 | Name | NID |
 | --- | --- |
