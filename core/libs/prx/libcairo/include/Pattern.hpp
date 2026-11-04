@@ -14,6 +14,23 @@ struct CairoColorStop {
     double alpha;
 };
 
+struct CairoMeshPoint {
+    double x{};
+    double y{};
+};
+
+struct CairoMeshColor {
+    double red{};
+    double green{};
+    double blue{};
+    double alpha{};
+};
+
+struct CairoMeshPatch {
+    CairoMeshPoint points[4][4]{};
+    CairoMeshColor colors[4]{};
+};
+
 struct CairoPattern {
     std::atomic<int> refCount{1};
     int status{0};
@@ -25,6 +42,10 @@ struct CairoPattern {
     std::vector<CairoColorStop> stops;
     CairoSurface* surface{};
     CairoColorStop solid{0, 0, 0, 0, 1};
+    std::vector<CairoMeshPatch> patches;
+    int currentSide{-2};
+    bool patchActive{};
+    bool hasColor[4]{};
 
     ~CairoPattern();
 };
@@ -33,11 +54,14 @@ constexpr int CairoStatusSuccess = 0;
 constexpr int CairoStatusNoMemory = 1;
 constexpr int CairoStatusPatternTypeMismatch = 14;
 constexpr int CairoStatusNullPointer = 7;
+constexpr int CairoStatusInvalidIndex = 21;
+constexpr int CairoStatusInvalidMeshConstruction = 36;
 
 constexpr int CairoPatternTypeSolid = 0;
 constexpr int CairoPatternTypeSurface = 1;
 constexpr int CairoPatternTypeLinear = 2;
 constexpr int CairoPatternTypeRadial = 3;
+constexpr int CairoPatternTypeMesh = 4;
 
 constexpr int CairoExtendPad = 3;
 constexpr int CairoExtendNone = 0;
