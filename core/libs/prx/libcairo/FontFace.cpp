@@ -1,3 +1,4 @@
+#include "prx/libcairo/include/FontFace.hpp"
 #include "prx/libcairo/include/FontOptions.hpp"
 #include "prx/libSceFreeType/include/Api.hpp"
 #include "prx/libfontconfig/include/InventoryExports.hpp"
@@ -56,6 +57,14 @@ cairo_font_face_t* Handle(CairoFontFaceState* state) {
     return reinterpret_cast<cairo_font_face_t*>(state);
 }
 
+}
+
+int CairoInternal::FontFaceStatus(cairo_font_face_t* face) {
+    return face ? State(face)->status : kNullPointer;
+}
+
+cairo_font_face_t* CairoInternal::FontFaceNoMemory() {
+    return Handle(&NoMemoryFace());
 }
 
 extern "C" {

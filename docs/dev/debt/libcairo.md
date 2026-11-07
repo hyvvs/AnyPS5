@@ -14,15 +14,18 @@
 
 ### Functional FreeType font-face integration
 
-- [FontFace.cpp](../../../core/libs/prx/libcairo/FontFace.cpp) implements six Cairo font-face lifetime, user-data and FreeType option-substitution exports. Font faces retain guest `FT_Face` objects with `FT_Reference_Face_nid_postfix` and release them on final destruction; user-data keys use pointer identity and invoke guest `APS5_VABI` destroy callbacks. Font options map to Fontconfig antialias, RGBA, hint-style and hinting pattern values. The FreeType bridge uses pinned `3rdparty/freetype` commit `37515cf56ba3349656049edbed89ffc6f6466f2d`. The caller must keep the owning `FT_Library` alive until its Cairo font faces are destroyed. Scaled fonts and glyph rasterization remain unimplemented.
+- [FontFace.cpp](../../../core/libs/prx/libcairo/FontFace.cpp) implements six Cairo font-face lifetime, user-data and FreeType option-substitution exports. Font faces retain guest `FT_Face` objects with `FT_Reference_Face_nid_postfix` and release them on final destruction; user-data keys use pointer identity and invoke guest `APS5_VABI` destroy callbacks. Font options map to Fontconfig antialias, RGBA, hint-style and hinting pattern values. The FreeType bridge uses pinned `3rdparty/freetype` commit `37515cf56ba3349656049edbed89ffc6f6466f2d`. The caller must keep the owning `FT_Library` alive until its Cairo font faces are destroyed. Glyph rasterization remains unimplemented.
+
+### Functional scaled-font metadata and lifetime
+
+- [ScaledFont.cpp](../../../core/libs/prx/libcairo/ScaledFont.cpp) implements the eight scaled-font creation, reference, destruction, status, face, matrix, CTM and font-options exports. Scaled-font state is atomically reference-counted, retains its font face, snapshots font matrices and options, preserves font-matrix translation and clears CTM translation. Error objects are immortal and return Cairo-compatible default metadata and the NO_MEMORY face. Native Cairo 1.18.0 differential tests cover metadata, option snapshots, reference lifetime, face retention and error statuses. This does not implement glyph rendering, extents, or FreeType scaled-font locking.
 
 ### Callable exports
 
-- [Callable exports](../../../core/libs/prx/libcairo/Export.cpp) - 118 remaining callable NIDs match the [public 3.20 catalogue](https://github.com/DNNDHH/PS5-3.20_Libs/blob/b2a77c09cd71c01f34c790cfbe98c751a13262ad/libcairo.c) and [selected export metadata](https://gist.github.com/kyon-eth/a0bb48f2b3070a5eac8a638810f195f2/a3838ac54ebcc0bbfeb3cc46002a9a2dcce4dbdc) from two version-labelled images (SHA-256 `ec2158e0c5875316d200037d7f4bc48861626451752523f6930d687307c75ef8`). The labels are not authenticated. Prototypes and behavior of these remaining declarations are unverified; they still throw through `NotImplemented_nid_no_patch`.
+- [Callable exports](../../../core/libs/prx/libcairo/Export.cpp) - 110 remaining callable NIDs match the [public 3.20 catalogue](https://github.com/DNNDHH/PS5-3.20_Libs/blob/b2a77c09cd71c01f34c790cfbe98c751a13262ad/libcairo.c) and [selected export metadata](https://gist.github.com/kyon-eth/a0bb48f2b3070a5eac8a638810f195f2/a3838ac54ebcc0bbfeb3cc46002a9a2dcce4dbdc) from two version-labelled images (SHA-256 `ec2158e0c5875316d200037d7f4bc48861626451752523f6930d687307c75ef8`). The labels are not authenticated. Prototypes and behavior of these remaining declarations are unverified; they still throw through `NotImplemented_nid_no_patch`.
 
 | Name | NID |
 | --- | --- |
-| `cairo_scaled_font_get_font_face` | `+BL3-h8zGDo` |
 | `cairo_paint` | `+PEo5Z7DOlY` |
 | `cairo_set_font_options` | `-aqFIBn0h78` |
 | `cairo_device_to_user_distance` | `-v5CZVGkN3k` |
@@ -39,11 +42,8 @@
 | `cairo_glyph_path` | `54HrgUIQHOk` |
 | `cairo_get_dash` | `5OZ1YwHyHd8` |
 | `cairo_set_source_rgb` | `6DvK+OdIPW4` |
-| `cairo_scaled_font_destroy` | `6Y3HHedGzlw` |
 | `cairo_pattern_reference` | `6qRL52tLOII` |
-| `cairo_scaled_font_get_font_options` | `8SOxQrQ7AfQ` |
 | `cairo_in_stroke` | `8zMm0QOWZAA` |
-| `cairo_scaled_font_get_ctm` | `A++pFuyxZPg` |
 | `cairo_set_font_size` | `A-0StSi2AwA` |
 | `cairo_surface_write_to_png_stream` | `A3FLVZ4FHbY` |
 | `cairo_restore` | `AoAG2JE8GIo` |
@@ -60,7 +60,6 @@
 | `cairo_scaled_font_extents` | `FbWFbLUQOys` |
 | `cairo_show_glyphs` | `FnhwGKKZOjU` |
 | `cairo_mesh_pattern_curve_to` | `H9bwCsWw7LA` |
-| `cairo_scaled_font_get_font_matrix` | `HKjYBSCx3mY` |
 | `cairo_mesh_pattern_line_to` | `HTB1uUwgSVQ` |
 | `cairo_get_line_cap` | `Hkp7M+pJILk` |
 | `cairo_region_get_rectangle` | `I5wa74016LQ` |
@@ -97,7 +96,6 @@
 | `cairo_append_path` | `XX9tocaUX+g` |
 | `cairo_region_union_rectangle` | `Ya+vgrJjBQE` |
 | `cairo_region_reference` | `Yarxt1LHaf0` |
-| `cairo_scaled_font_status` | `a5WkqZXnG2w` |
 | `cairo_in_fill` | `akimK5gpdho` |
 | `cairo_get_line_join` | `azNGOQLubLc` |
 | `cairo_set_source` | `bU0QXekwNes` |
@@ -119,7 +117,6 @@
 | `cairo_glyph_free` | `lAEbTbSUTTo` |
 | `cairo_select_font_face` | `ldk9m5h+-no` |
 | `cairo_line_to` | `mSda1B-vfkM` |
-| `cairo_scaled_font_reference` | `mb4bdMeFRs8` |
 | `cairo_set_matrix` | `niIR3TU71Bg` |
 | `cairo_set_line_cap` | `oFltTuV0f7Y` |
 | `cairo_scaled_font_text_to_glyphs` | `ojbXRC0CmUo` |
@@ -132,7 +129,6 @@
 | `cairo_move_to` | `smpeN8iWrcc` |
 | `cairo_scale` | `suww6V0qqpU` |
 | `cairo_get_operator` | `tYTJIi4s6t0` |
-| `cairo_scaled_font_create` | `uKNPDudJTmo` |
 | `cairo_pattern_create_radial` | `uYFjM3ReDRQ` |
 | `cairo_set_source_surface` | `vcN1gg+gWRg` |
 | `cairo_region_destroy` | `vnHq+jcDKBM` |
