@@ -27,6 +27,11 @@ class RedactTests(unittest.TestCase):
         out = bug_report.redact("banana ana ana.txt ana-dir", home="", user="ana", host="")
         self.assertEqual(out, "banana <user> <user>.txt ana-dir")
 
+    def test_hostnames_are_case_insensitive_but_keep_word_boundaries(self):
+        out = bug_report.redact("BUILDBOX buildbox BuildBox.example BUILDBOX-backup",
+                                home="", user="", host="BuildBox")
+        self.assertEqual(out, "<host> <host> <host>.example BUILDBOX-backup")
+
     def test_windows_home_matches_mixed_case_and_separators(self):
         out = bug_report.redact(
             r"opened c:/PROFILES\Example/games/title.elf and C:\Profiles\Example-backup\title.elf",
@@ -87,6 +92,16 @@ class BundleTests(unittest.TestCase):
         for name, text in contents.items():
             for secret in ("/home/ana", "serverfestivo", "192.168.1.20", "10.0.0.7"):
                 self.assertNotIn(secret, text, f"{secret} leaked into {name}")
+
+    def test_case_variant_hostname_is_redacted_in_the_archive(self):
+        self.report.write_text('{"machine": "SERVERFESTIVO"}', encoding="utf-8")
+        self.log.write_text("SERVERFESTIVO finished the run\n", encoding="utf-8")
+        out, _ = self.bundle()
+        with zipfile.ZipFile(out) as bundle:
+            archived = json.loads(bundle.read("anyps5-report.json"))
+            log = bundle.read("anyps5.log").decode("utf-8")
+        self.assertEqual(archived, {"machine": "<host>"})
+        self.assertEqual(log, "<host> finished the run\n")
 
     def test_escaped_home_paths_are_redacted_in_nested_json(self):
         cases = (
