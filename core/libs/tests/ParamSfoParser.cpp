@@ -37,6 +37,16 @@ void Put32(std::vector<std::uint8_t>& bytes, std::size_t offset, std::uint32_t v
     std::memcpy(bytes.data() + offset, &value, 4);
 }
 
+std::uint32_t Get32(const std::vector<std::uint8_t>& bytes, std::size_t offset) {
+    std::uint32_t value = 0;
+    std::memcpy(&value, bytes.data() + offset, sizeof(value));
+    return value;
+}
+
+void Put16(std::vector<std::uint8_t>& bytes, std::size_t offset, std::uint16_t value) {
+    std::memcpy(bytes.data() + offset, &value, sizeof(value));
+}
+
 std::vector<std::uint8_t> Build(const std::vector<Entry>& entries) {
     std::vector<std::uint8_t> keys;
     std::vector<std::uint8_t> data;
@@ -142,6 +152,25 @@ int main() {
         bytes = Build(Valid());
         Put32(bytes, 20 + 4, 0x10000);
         Rejects(path, bytes, "entry is out of bounds");
+        bytes = Build(Valid());
+        const auto keyTable = Get32(bytes, 8);
+        const auto dataTable = Get32(bytes, 12);
+        const auto lastKeyEntry = 20 + (Valid().size() - 1) * 16;
+        Put16(bytes, lastKeyEntry, static_cast<std::uint16_t>(dataTable - keyTable));
+        Rejects(path, bytes, "key is out of bounds");
+        bytes = Build(Valid());
+        bytes[dataTable - 1] = 'X';
+        Put16(bytes, lastKeyEntry, static_cast<std::uint16_t>(dataTable - keyTable - 1));
+        Rejects(path, bytes, "key is not terminated");
+        bytes = Build(Valid());
+        Put32(bytes, 8, 0);
+        Rejects(path, bytes, "tables are out of bounds");
+        bytes = Build(Valid());
+        Put32(bytes, 12, keyTable - 1);
+        Rejects(path, bytes, "tables are out of bounds");
+        bytes = Build(Valid());
+        Put32(bytes, 12, static_cast<std::uint32_t>(bytes.size() + 1));
+        Rejects(path, bytes, "tables are out of bounds");
         bytes = Build(Valid());
         bytes.resize(bytes.size() - 64);
         Rejects(path, bytes, "out of bounds");
