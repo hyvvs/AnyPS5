@@ -407,6 +407,9 @@ static void CheckChunkRules(void* handle, const std::vector<std::uint8_t>& rgbPn
 
     const std::vector<PngChunk> palette = SplitChunks(std::span<const std::uint8_t>(PALETTE_TRNS, sizeof(PALETTE_TRNS)));
     Require(palette.size() == 5 && std::strcmp(palette[1].type, "PLTE") == 0 && std::strcmp(palette[2].type, "tRNS") == 0);
+    const std::vector<PngChunk> oneBitPalette = SplitChunks(std::span<const std::uint8_t>(PALETTE_1BIT_ADAM7, sizeof(PALETTE_1BIT_ADAM7)));
+    Require(oneBitPalette.size() == 4 && std::strcmp(oneBitPalette[1].type, "PLTE") == 0);
+    Require(ParseWith(JoinChunks(oneBitPalette), info) == 0);
     const std::vector<std::uint8_t> transparent = {255, 0, 0, 255, 0, 255, 0, 0, 0, 0, 255, 255, 255, 255, 0, 128};
     const std::vector<std::uint8_t> opaque = {255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255};
     const std::vector<std::uint8_t> shortPalette = {255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255};
@@ -419,12 +422,18 @@ static void CheckChunkRules(void* handle, const std::vector<std::uint8_t>& rgbPn
     longPlte[1].data.resize(257 * 3);
     auto noEntries = palette;
     noEntries[1].data.clear();
+    auto excessiveOneBit = oneBitPalette;
+    excessiveOneBit[1].data.insert(excessiveOneBit[1].data.end(), {0, 64, 128});
+    auto excessiveTwoBit = palette;
+    excessiveTwoBit[1].data.insert(excessiveTwoBit[1].data.end(), {0, 64, 128});
     const std::vector<std::vector<std::uint8_t>> paletteErrors = {
         JoinChunks({palette[0], palette[2], palette[3], palette[4]}),
         JoinChunks(shortPlte),
         JoinChunks(shortPlteBadCrc),
         JoinChunks(longPlte),
         JoinChunks(noEntries),
+        JoinChunks(excessiveOneBit),
+        JoinChunks(excessiveTwoBit),
         JoinChunks(WithChunk(palette, 2, palette[1])),
         JoinChunks({palette[0], palette[3], palette[1], palette[4]}),
     };

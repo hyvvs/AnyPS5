@@ -284,6 +284,7 @@ ChunkScan scanChunks(std::span<const std::uint8_t> png, bool padPalette = true) 
     }
     scan.png.assign(SIGNATURE.begin(), SIGNATURE.end());
     std::optional<std::uint8_t> colorType;
+    std::uint32_t maxIndexedEntries = MAX_PALETTE_SIZE / 3;
     bool paletteSeen = false;
     bool hasPalette = false;
     bool hasTransparency = false;
@@ -316,7 +317,9 @@ ChunkScan scanChunks(std::span<const std::uint8_t> png, bool padPalette = true) 
             const bool validLength = chunk->length != 0 && chunk->length % 3 == 0 && chunk->length <= MAX_PALETTE_SIZE;
             const bool grayscale = *colorType == static_cast<std::uint8_t>(Decoder::Png::ColorType::Grayscale)
                 || *colorType == static_cast<std::uint8_t>(Decoder::Png::ColorType::GrayscaleAlpha);
-            if (paletteSeen || !validLength || grayscale) {
+            const bool excessiveIndexedPalette = *colorType == static_cast<std::uint8_t>(Decoder::Png::ColorType::Palette)
+                && chunk->length / 3 > maxIndexedEntries;
+            if (paletteSeen || !validLength || grayscale || excessiveIndexedPalette) {
                 scan.headerResult = SCE_PNG_DEC_ERROR_INVALID_DATA;
                 return scan;
             }
@@ -342,6 +345,9 @@ ChunkScan scanChunks(std::span<const std::uint8_t> png, bool padPalette = true) 
                 return scan;
             }
             colorType = chunk->data[9];
+            if (*colorType == static_cast<std::uint8_t>(Decoder::Png::ColorType::Palette)) {
+                maxIndexedEntries = 1u << chunk->data[8];
+            }
             appendChunk(scan.png, "IHDR", chunk->data, chunk->crc);
         } else if (chunk->is("PLTE")) {
             paletteSeen = true;
