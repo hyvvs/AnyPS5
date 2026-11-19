@@ -164,6 +164,45 @@ class OpenPrProgressTests(unittest.TestCase):
         self.assertFalse(result["available"])
         self.assertEqual(result["reason"], "API unavailable")
 
+    def test_failed_estimate_keeps_existing_progress_refs(self):
+        refs = ("refs/open-pr-progress/base", "refs/open-pr-progress/12",
+                "refs/open-pr-progress/local-bookmark")
+        for ref in refs:
+            self.git("update-ref", ref, self.base)
+        with patch.object(progress_prs, "collect_open_prs", side_effect=RuntimeError("API unavailable")):
+            result = progress_prs.estimate("boykopovar/AnyPS5", self.root)
+        self.assertFalse(result["available"])
+        for ref in refs:
+            self.assertEqual(self.git("rev-parse", "--verify", ref).stdout.strip(), self.base)
+
+    def test_estimator_ref_namespace_is_unique_between_invocations(self):
+        script = "import progress_prs; print(progress_prs.REFS)"
+        tool_directory = Path(progress_prs.__file__).parent
+        prefixes = []
+        for _ in range(2):
+            result = subprocess.run([sys.executable, "-c", script], cwd=tool_directory,
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            prefixes.append(result.stdout.strip())
+        self.assertTrue(all(prefix.startswith("refs/open-pr-progress/") for prefix in prefixes))
+        self.assertNotEqual(*prefixes)
+
+    def test_completed_estimate_cleans_own_refs_and_preserves_older_refs(self):
+        bookmark = "refs/open-pr-progress/local-bookmark"
+        self.git("update-ref", bookmark, self.base)
+
+        def discover(repo, root):
+            self.git("update-ref", progress_prs.REFS + "/base", self.base)
+            self.git("update-ref", progress_prs.REFS + "/12", self.base)
+            return {}, self.base
+
+        with patch.object(progress_prs, "collect_open_prs", side_effect=discover), \
+                patch.object(progress_prs, "measure", return_value={"done": 0, "total": 2, "percent": 0}):
+            result = progress_prs.estimate("boykopovar/AnyPS5", self.root)
+        self.assertTrue(result["available"], result)
+        self.assertEqual(self.git("rev-parse", "--verify", bookmark).stdout.strip(), self.base)
+        self.assertEqual(self.git("for-each-ref", "--format=%(refname)", progress_prs.REFS).stdout, "")
+
     def test_unavailable_estimate_survives_missing_checkout_cleanup(self):
         missing = self.root / "missing-checkout"
         self.assertFalse(missing.exists())

@@ -2,6 +2,7 @@ import argparse
 import importlib.util
 import json
 import os
+import secrets
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -11,7 +12,7 @@ import pr_overlap
 
 ROOT = Path(__file__).resolve().parent.parent
 REMOTE = "https://github.com"
-REFS = "refs/open-pr-progress"
+REFS = "refs/open-pr-progress/" + secrets.token_hex(16)
 
 
 def git(root, *args, check=True):
