@@ -70,6 +70,35 @@ class RebaseVerifyTests(unittest.TestCase):
     def test_a_clean_rebase_keeps_every_line_author_and_commit(self):
         self.assertEqual(self.verify(), [])
 
+    def test_a_binary_file_must_keep_its_bytes_across_the_rebase(self):
+        for branch, content in (("old", b"\x00original\xff"), ("new", b"\x00substitute\xfe")):
+            self.git("checkout", "-q", branch)
+            (self.root / "fixture.bin").write_bytes(content)
+            self.git("add", "fixture.bin")
+            self.git("commit", "-q", "--amend", "--no-edit")
+        self.assertIn("fixture.bin: binary content differs after rebase", self.verify())
+
+    def test_identical_binary_file_bytes_survive_a_rebase(self):
+        for branch in ("old", "new"):
+            self.git("checkout", "-q", branch)
+            (self.root / "fixture.bin").write_bytes(b"\x00retained\xff")
+            self.git("add", "fixture.bin")
+            self.git("commit", "-q", "--amend", "--no-edit")
+        self.assertEqual(self.verify(), [])
+
+    def test_binary_content_already_applied_upstream_is_preserved(self):
+        self.git("checkout", "-q", "old")
+        (self.root / "fixture.bin").write_bytes(b"\x00upstream\xff")
+        self.git("add", "fixture.bin")
+        self.git("commit", "-q", "--amend", "--no-edit")
+        self.git("checkout", "-q", "main")
+        (self.root / "fixture.bin").write_bytes(b"\x00upstream\xff")
+        self.git("add", "fixture.bin")
+        self.git("commit", "-q", "-m", "docs(tools): add shared binary fixture")
+        self.git("checkout", "-q", "new")
+        self.git("merge", "-q", "--no-ff", "--no-edit", "main")
+        self.assertEqual(self.verify(), [])
+
     def test_relative_diff_cannot_hide_lost_lines_from_a_subdirectory(self):
         nested = self.root / "nested"
         nested.mkdir()

@@ -80,6 +80,28 @@ def changed_modes(root, base, tip):
     return modes
 
 
+def binary_paths(root, base, tip):
+    records = git(root, "diff", "--numstat", "-z", "--no-renames", "--no-relative", "--no-ext-diff",
+                  "--no-textconv", base, tip, raw=True).split(b"\0")
+    return {record.split(b"\t", 2)[2] for record in records if record.startswith(b"-\t-\t")}
+
+
+def blob_at(root, revision, path):
+    records = git(root, "ls-tree", "-z", "--full-tree", revision, "--", ":(literal)" + path.decode("utf-8"),
+                  raw=True).split(b"\0")
+    for record in records:
+        metadata, separator, name = record.partition(b"\t")
+        if separator and name == path:
+            return metadata.split()[2]
+    return None
+
+
+def binary_differences(root, old_base, old, new_base, new):
+    paths = binary_paths(root, old_base, old) | binary_paths(root, new_base, new)
+    return [f"{path.decode('utf-8', 'backslashreplace')}: binary content differs after rebase"
+            for path in sorted(paths) if blob_at(root, old, path) != blob_at(root, new, path)]
+
+
 def mode_differences(root, old_base, old, new_base, new):
     old_modes = changed_modes(root, old_base, old)
     new_modes = changed_modes(root, new_base, new)
@@ -117,6 +139,7 @@ def verify(root, old, new, onto):
     }
     problems += differences(expected_deleted, new_deleted, deleted=True)
     problems += mode_differences(root, old_base, old, new_base, new)
+    problems += binary_differences(root, old_base, old, new_base, new)
     return old_base, count_old, count_new, problems
 
 
