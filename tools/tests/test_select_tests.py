@@ -120,6 +120,43 @@ class SelectTests(SelectFixture):
                 self.assertIsNone(selected)
                 self.assertIn(changed, output)
 
+
+class AssignedFixturePathTests(unittest.TestCase):
+    def test_path_arguments_keep_standalone_equals_and_parse_option_assignments_once(self):
+        absolute = str(Path(os.path.abspath("fixtures/clip=01.bin")))
+        arguments = [absolute, "--fixture=" + absolute, "-DFIXTURE=" + absolute,
+                     "--fixture=relative.bin", "--unrelated=one=two"]
+        self.assertEqual(list(select_tests.paths(arguments)), [absolute, absolute, absolute])
+
+    @unittest.skipUnless(shutil.which("cmake") and shutil.which("ninja") and
+                         (shutil.which("gcc") or shutil.which("cc")), "needs CMake, Ninja and a C compiler")
+    def test_real_ctest_option_value_is_a_tracked_source_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, build = root / "source", root / "build"
+            source.mkdir()
+            (source / "fixtures").mkdir()
+            (source / "fixtures" / "clip=01.bin").write_bytes(b"fixture")
+            (source / "main.c").write_text("int main(void) { return 0; }\n", encoding="utf-8")
+            (source / "CMakeLists.txt").write_text(
+                "cmake_minimum_required(VERSION 3.21)\nproject(assigned_input C)\nenable_testing()\n"
+                "add_executable(affected main.c)\nadd_executable(unaffected main.c)\n"
+                "add_test(NAME affected COMMAND affected --fixture=${CMAKE_SOURCE_DIR}/fixtures/clip=01.bin)\n"
+                "add_test(NAME unaffected COMMAND unaffected)\n", encoding="utf-8")
+            compiler = shutil.which("gcc") or shutil.which("cc")
+            subprocess.run(["cmake", "-G", "Ninja", "-S", str(source), "-B", str(build),
+                            f"-DCMAKE_C_COMPILER={compiler}"], check=True, capture_output=True, timeout=60)
+            subprocess.run(["cmake", "--build", str(build)], check=True, capture_output=True, timeout=60)
+            graph_file = root / "graph.json"
+            select_tests.dump(select_tests.Build(build), graph_file)
+            graph = select_tests.load_graph(graph_file)
+            self.assertIn("fixtures/clip=01.bin", graph["tests"]["affected"]["arguments"])
+            self.assertNotIn("fixtures/clip=01.bin", graph["tests"]["unaffected"]["arguments"])
+            selected, full = select_tests.select(graph, ["fixtures/clip=01.bin"])
+            self.assertEqual(full, [])
+            self.assertEqual(selected, {"affected"})
+
+
 class FixtureSelectionTests(unittest.TestCase):
     def test_changed_setup_selects_all_consumers_and_their_other_setups(self):
         def test(target, sets=(), requires=()):

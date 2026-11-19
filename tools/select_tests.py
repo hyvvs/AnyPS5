@@ -161,9 +161,12 @@ def relative(path, root):
 
 def paths(arguments):
     for argument in arguments:
-        value = argument.partition("=")[2] if argument.startswith("-D") else argument
-        if os.path.isabs(value):
-            yield value
+        if os.path.isabs(argument):
+            yield argument
+        elif "=" in argument:
+            value = argument.partition("=")[2]
+            if os.path.isabs(value):
+                yield value
 
 
 def changed_paths(path):
