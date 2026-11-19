@@ -1229,6 +1229,41 @@ class UnwrapTest(unittest.TestCase):
         self.assertIn("no inner ELF header", result.stderr)
         self.assertFalse(output.exists())
 
+    def test_unrelated_elf_signature_before_inner_header_does_not_hide_it(self):
+        container = bytearray(build_container(default_segments(), default_records(), default_payloads()))
+        baseline, output = self.convert(container)
+        self.assertEqual(baseline.returncode, 0, baseline.stderr)
+        expected = output.read_bytes()
+        for decoy in (b"\x7fELF", build_elf([])):
+            with self.subTest(decoy=decoy[:8]):
+                modified = bytearray(container)
+                modified[0x120:0x120 + len(decoy)] = decoy
+                result, output = self.convert(modified)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(output.read_bytes(), expected)
+
+    def test_declared_self_entry_count_must_identify_inner_header(self):
+        container = bytearray(build_container(default_segments(), default_records(), default_payloads()))
+        struct.pack_into("<H", container, 0x18, 11)
+        result, output = self.convert(container)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("no inner ELF header after SELF entry table", result.stderr)
+        self.assertFalse(output.exists())
+
+    def test_count_backed_self_entries_are_read_from_the_table_start(self):
+        baseline, output = self.convert(build_container(default_segments(), default_records(), default_payloads()))
+        self.assertEqual(baseline.returncode, 0, baseline.stderr)
+        expected = output.read_bytes()
+        container = bytearray(build_container(default_segments(), [], default_payloads()))
+        struct.pack_into("<H", container, 0x18, 12)
+        for index, record in enumerate(default_records()):
+            flags, offset, size = record
+            struct.pack_into("<QQQQ", container, 0x20 + index * 0x20, flags, offset, size, size)
+        container[0x120:0x124] = b"\x7fELF"
+        result, output = self.convert(container)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output.read_bytes(), expected)
+
     def test_incomplete_elf_metadata_is_refused_without_replacing_output(self):
         truncated_header = bytearray(FIRST_REGION)
         struct.pack_into("<I", truncated_header, 0, SELF_MAGIC)

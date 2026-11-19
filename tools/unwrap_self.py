@@ -50,6 +50,8 @@ from pathlib import Path
 
 SELF_MAGIC = 0x1D3D154F
 SELF_MAGIC_KERNEL = 0xEEF51454
+SELF_HEADER_SIZE = 0x20
+SELF_ENTRY_COUNT_OFFSET = 0x18
 RECORD_OFFSET = 0x40
 RECORD_SIZE = 0x20
 RECORD_HAS_SEGMENT = 0x800
@@ -102,8 +104,10 @@ def entropy(data):
 
 def read_records(data):
     records = []
-    offset = RECORD_OFFSET
-    while offset + RECORD_SIZE <= FIRST_REGION:
+    entry_count = struct.unpack_from("<H", data, SELF_ENTRY_COUNT_OFFSET)[0] if len(data) >= SELF_HEADER_SIZE else 0
+    offset = SELF_HEADER_SIZE if entry_count else RECORD_OFFSET
+    end = min(len(data), offset + entry_count * RECORD_SIZE if entry_count else FIRST_REGION)
+    while offset + RECORD_SIZE <= end:
         flags, segment, size, size_again = struct.unpack_from("<QQQQ", data, offset)
         if size == 0 or size != size_again:
             break
@@ -117,9 +121,28 @@ def read_records(data):
 
 
 def parse_elf(data):
-    inner = data.find(b"\x7fELF")
-    if inner < 0:
-        raise Refused("no inner ELF header")
+    if len(data) >= SELF_HEADER_SIZE:
+        entry_count = struct.unpack_from("<H", data, SELF_ENTRY_COUNT_OFFSET)[0]
+        if entry_count:
+            inner = SELF_HEADER_SIZE + entry_count * RECORD_SIZE
+            if data[inner:inner + 4] != b"\x7fELF":
+                raise Refused("no inner ELF header after SELF entry table")
+            return parse_elf_at(data, inner)
+    first_error = None
+    start = 0
+    while (inner := data.find(b"\x7fELF", start)) >= 0:
+        try:
+            return parse_elf_at(data, inner)
+        except Refused as error:
+            if first_error is None:
+                first_error = error
+        start = inner + 4
+    if first_error is not None:
+        raise first_error
+    raise Refused("no inner ELF header")
+
+
+def parse_elf_at(data, inner):
     if inner + 0x40 > len(data):
         raise Refused("inner ELF header is truncated")
     header = bytearray(data[inner:inner + 0x40])
