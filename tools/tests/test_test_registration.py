@@ -17,6 +17,30 @@ import check_test_registration
 
 class RegistrationJsonTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("cmake") and shutil.which("ninja"), "CMake and Ninja are required")
+    def test_cmake_echo_of_unregistered_executable_is_not_test_coverage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "tests").mkdir()
+            (root / "CMakeLists.txt").write_text(
+                "cmake_minimum_required(VERSION 3.20)\nproject(fixture CXX)\nenable_testing()\nadd_subdirectory(tests)\n")
+            (root / "tests/CMakeLists.txt").write_text(
+                "add_executable(unrun main.cpp)\n"
+                "add_executable(covered main.cpp)\n"
+                "add_test(NAME print_name COMMAND ${CMAKE_COMMAND} -E echo unrun)\n"
+                "add_test(NAME print_more COMMAND ${CMAKE_COMMAND} -E echo_append unrun)\n"
+                "add_test(NAME run_covered COMMAND ${CMAKE_COMMAND} -E env $<TARGET_FILE:covered>)\n")
+            (root / "tests/main.cpp").write_text("int main() { return 0; }\n")
+            build = root / "build"
+            subprocess.run(["cmake", "-S", str(root), "-B", str(build), "-G", "Ninja"],
+                           check=True, capture_output=True)
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(check_test_registration.main([str(build), "--json"]), 1)
+            result = json.loads(output.getvalue())
+            self.assertEqual(result["registered"], ["covered"])
+            self.assertEqual(result["new_unregistered"], ["unrun"])
+
+    @unittest.skipUnless(shutil.which("cmake") and shutil.which("ninja"), "CMake and Ninja are required")
     def test_real_cmake_executable_report(self):
         import json
         import shutil

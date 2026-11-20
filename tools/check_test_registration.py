@@ -228,6 +228,10 @@ def registered(build):
         for arguments, disabled in tests:
             if disabled:
                 continue
+            if (len(arguments) >= 3 and
+                    re.split(r"[\\/]", arguments[0])[-1].lower() in ("cmake", "cmake.exe") and
+                    arguments[1:3] in (["-E", "echo"], ["-E", "echo_append"])):
+                continue
             for index, argument in enumerate(arguments):
                 if index and (argument.startswith("-") or re.match(r"^[A-Za-z_]\w*=", argument)):
                     continue
