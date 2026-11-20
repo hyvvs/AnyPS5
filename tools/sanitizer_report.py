@@ -18,7 +18,7 @@ REPORT_LINES = (
 REPORT_LENGTH = 200
 
 
-def results(path):
+def results(path, unexecuted=None):
     root = ET.parse(path).getroot()
     if root.tag not in ("testsuite", "testsuites"):
         raise ValueError(f"{path}: expected a JUnit testsuite or testsuites root, got {root.tag!r}")
@@ -39,6 +39,8 @@ def results(path):
             outcome = "failed"
         else:
             outcome = "passed"
+        if unexecuted is not None and status == "notrun" and outcome == "failed" and case.find("failure") is None and case.find("error") is None:
+            unexecuted.add(name)
         found[name] = outcome
     if not found:
         raise ValueError(f"{path}: the report lists no tests")
@@ -101,11 +103,11 @@ def test_name(text):
                             for character in text) + "</code>"
 
 
-def summarize(title, found, known=None, details=None):
-    known, details = known or {}, details or {}
+def summarize(title, found, known=None, details=None, unexecuted=()):
+    known, details, unexecuted = known or {}, details or {}, set(unexecuted)
     counts = {outcome: sum(1 for value in found.values() if value == outcome) for outcome in ("passed", "skipped", "failed")}
-    failed = sorted(name for name, outcome in found.items() if outcome == "failed" and name not in known)
-    expected = sorted(name for name, outcome in found.items() if outcome == "failed" and name in known)
+    failed = sorted(name for name, outcome in found.items() if outcome == "failed" and (name not in known or name in unexecuted))
+    expected = sorted(name for name, outcome in found.items() if outcome == "failed" and name in known and name not in unexecuted)
     tally = f"{counts['failed']} failed" + (f" ({len(expected)} known)" if expected else "")
     lines = [f"### {title}", "",
              f"{len(found)} tests: {counts['passed']} passed, {counts['skipped']} skipped, {tally}.", ""]
@@ -122,6 +124,9 @@ def summarize(title, found, known=None, details=None):
     absent = sorted(name for name in known if name not in found)
     if absent:
         lines += ["| Listed as known but not in this run |", "| - |"] + [f"| {test_name(name)} |" for name in absent] + [""]
+    not_run = sorted(name for name in known if name in unexecuted)
+    if not_run:
+        lines += ["| Listed as known but not executed | Reason |", "| - | - |"] + [f"| {test_name(name)} | {detail_cell(known[name])} |" for name in not_run] + [""]
     return "\n".join(lines) + "\n", bool(failed)
 
 
@@ -148,15 +153,16 @@ def main(argv=None):
                                            (source.exists() and args.summary.exists() and source.samefile(args.summary))):
                     raise ValueError(f"summary output must differ from input: {source}")
         known = load_known(args.known, args.sanitizer) if args.known else {}
-        found, details = results(args.junit), reports(args.junit)
-        text, failing = summarize(args.title, found, known, details)
+        unexecuted = set()
+        found, details = results(args.junit, unexecuted), reports(args.junit)
+        text, failing = summarize(args.title, found, known, details, unexecuted)
         output = text
         if args.json:
             output = json.dumps({"title": args.title, "unexpected_failure": failing,
                                  "tests": [{"name": name, "outcome": found[name], "known_reason": known.get(name),
-                                            "report": details.get(name), "unexpected": found[name] == "failed" and name not in known}
+                                            "report": details.get(name), "unexpected": found[name] == "failed" and (name not in known or name in unexecuted)}
                                            for name in sorted(found)],
-                                 "known_not_run": sorted(set(known) - set(found))}, ensure_ascii=False, indent=2) + "\n"
+                                 "known_not_run": sorted((set(known) - set(found)) | (set(known) & unexecuted))}, ensure_ascii=False, indent=2) + "\n"
         if args.summary:
             with args.summary.open("a", encoding="utf-8") as summary:
                 summary.write(text)

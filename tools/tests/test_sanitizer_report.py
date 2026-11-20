@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 from pathlib import Path
 import contextlib
@@ -67,6 +68,31 @@ class SanitizerReportTests(unittest.TestCase):
         code, stdout, _ = self.run_main(path)
         self.assertEqual(code, 1)
         self.assertIn("4 tests: 0 passed, 2 skipped, 2 failed.", stdout)
+
+    @unittest.skipUnless(shutil.which("ctest"), "CTest is required")
+    def test_known_sanitizer_failure_does_not_exempt_missing_test_executable(self):
+        root = Path(self.directory.name)
+        (root / "CTestTestfile.cmake").write_text(
+            'add_test([=[missing_binary]=] [=[missing-binary-not-built-here]=])\n', encoding="utf-8")
+        junit = root / "actual-ctest.xml"
+        completed = subprocess.run(["ctest", "--test-dir", str(root), "--output-junit", str(junit)],
+                                   capture_output=True, text=True, timeout=15)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn('status="notrun"', junit.read_text(encoding="utf-8"))
+        known = self.write_known("missing_binary address previously tracked sanitizer failure")
+        code, output, stderr = self.run_main(junit, "--known", known, "--sanitizer", "address", "--json")
+        self.assertEqual(code, 1, output + stderr)
+        report = json.loads(output)
+        self.assertTrue(report["unexpected_failure"])
+        self.assertEqual(report["tests"][0]["outcome"], "failed")
+        self.assertTrue(report["tests"][0]["unexpected"])
+        self.assertEqual(report["known_not_run"], ["missing_binary"])
+        code, markdown, stderr = self.run_main(junit, "--known", known, "--sanitizer", "address")
+        self.assertEqual(code, 1, markdown + stderr)
+        self.assertIn("| Failed test |", markdown)
+        self.assertIn("| `missing_binary` |", markdown)
+        self.assertIn("| Listed as known but not executed | Reason |", markdown)
+        self.assertNotIn("1 failed (1 known)", markdown)
 
     def test_a_test_listed_twice_is_rejected(self):
         summary = self.write("", "summary.md")
