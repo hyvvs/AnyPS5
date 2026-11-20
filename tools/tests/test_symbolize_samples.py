@@ -477,6 +477,28 @@ class SymbolizeSamplesTests(unittest.TestCase):
         self.assertIsNone(module.name(0x1100))
         self.assertEqual(module.name(0x2840), "late_fn")
 
+    def test_overlapping_code_sections_cannot_attribute_a_sample_to_the_wrong_function(self):
+        path = self.libs / "ambiguous-code.prx"
+        for section in (1, 2):
+            with self.subTest(section=section):
+                build_pe(path, second_code=True)
+                data = bytearray(path.read_bytes())
+                struct.pack_into("<I", data, 0x58 + 240 + section * 40 + 12, 0x1000)
+                path.write_bytes(data)
+                with self.assertRaisesRegex(ValueError, "overlapping PE sections"):
+                    symbolize_samples.PeModule(path)
+                warnings = []
+                symbolizer = symbolize_samples.Symbolizer([self.libs], {path.name: (SIZE_OF_IMAGE, TIMESTAMP)},
+                                                          warn=warnings.append)
+                frame = f"{path.name}+0x1040"
+                self.assertEqual(symbolizer.frame(frame), frame)
+                self.assertTrue(any("overlapping PE sections" in warning for warning in warnings))
+                inventory = subprocess.run([sys.executable, str(Path(symbolize_samples.__file__).with_name("pe_symbol_inventory.py")), str(path)],
+                                           capture_output=True, encoding="utf-8", timeout=5)
+                self.assertEqual(inventory.returncode, 2, inventory.stdout + inventory.stderr)
+                self.assertIn("overlapping PE sections", inventory.stderr)
+                self.assertNotIn("Traceback", inventory.stderr)
+
     def test_coff_symbols_large_offsets_and_overflow_are_omitted(self):
         path = self.libs / "overflow.prx"
         build_pe(path)

@@ -64,6 +64,17 @@ class PeModule:
             virtual_size, rva, raw_size, raw_pointer = struct.unpack_from("<IIII", data, entry + 8)
             characteristics = struct.unpack_from("<I", data, entry + 36)[0]
             self.sections.append((rva, max(virtual_size, raw_size), raw_size, raw_pointer, characteristics))
+        mappings = [(start, start + size, bool(flags & IMAGE_SCN_CNT_CODE))
+                    for start, size, _, _, flags in self.sections if size]
+        if self.headers_size:
+            mappings.append((0, self.headers_size, False))
+        mapped_until = code_until = 0
+        for start, end, executable in sorted(mappings):
+            if start < (mapped_until if executable else code_until):
+                raise ValueError(f"{path}: overlapping PE sections contain executable code")
+            mapped_until = max(mapped_until, end)
+            if executable:
+                code_until = max(code_until, end)
         symbols = self.coff_symbols(data, symbol_table, symbol_count) if symbol_table and symbol_count else []
         self.exported = not symbols
         if self.exported and export_rva:
