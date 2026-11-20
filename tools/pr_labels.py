@@ -51,8 +51,23 @@ def strip_comments(body):
     return re.sub(r"<!--.*?-->", "", body or "", flags=re.S)
 
 
+def strip_fenced_examples(body):
+    remaining = []
+    fence = None
+    for line in body.splitlines():
+        match = re.match(r"^[ \t]{0,3}(`{3,}|~{3,})", line)
+        if fence is None:
+            if match:
+                fence = match.group(1)
+            else:
+                remaining.append(line)
+        elif match and match.group(1)[0] == fence[0] and len(match.group(1)) >= len(fence) and not line[match.end():].strip():
+            fence = None
+    return "\n".join(remaining)
+
+
 def title_ids(body):
-    body = strip_comments(body)
+    body = strip_fenced_examples(strip_comments(body))
     checklist = CHECKLIST_UNBLOCKS.search(body)
     match = checklist if checklist and checklist.group(1).strip() else UNBLOCKS.search(body)
     return set(TITLE_ID.findall(match.group(1))) if match and not NONE.match(match.group(1)) else set()

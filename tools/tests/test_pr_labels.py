@@ -172,6 +172,8 @@ class TitleIdTests(unittest.TestCase):
         for body, expected in cases:
             with self.subTest(body=body):
                 self.assertEqual(pr_labels.title_ids(body), expected)
+                addition, _ = pr_labels.labels_for(pr(body=body))
+                self.assertEqual(pr_labels.UNBLOCKS_LABEL in addition, bool(expected))
 
     def test_checklist_unblocks_wins_over_an_earlier_prose_line(self):
         body = "### Tested\nUnblocks: none in this change.\n### Checklist\n- [x] Unblocks: PPSA01325 #3232\n"
@@ -189,6 +191,19 @@ class TitleIdTests(unittest.TestCase):
 
     def test_none_body(self):
         self.assertEqual(pr_labels.title_ids(None), set())
+
+    def test_fenced_examples_do_not_create_false_unblocks_labels(self):
+        cases = (
+            ("### What\n```text\nUnblocks: PPSA01325\n```\n### Checklist\n"
+             "- [ ] Unblocks: <!-- title ID or none -->\n", set()),
+            ("### What\n~~~markdown\n- [x] Unblocks: PPSA01325 #3232\n~~~\n"
+             "Unblocks: none\n", set()),
+            ("````python\nUnblocks: PPSA01325\n`````\n"
+             "- [ ] Unblocks: PPSA04609 #4000\n", {"PPSA04609"}),
+        )
+        for body, expected in cases:
+            with self.subTest(body=body):
+                self.assertEqual(pr_labels.title_ids(body), expected)
 
 
 class PerfTests(unittest.TestCase):
