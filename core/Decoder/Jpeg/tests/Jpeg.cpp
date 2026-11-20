@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -64,6 +65,25 @@ int main() {
     const std::vector<std::uint8_t> rgbJpeg = Decoder::Jpeg::Encode(rgb, width, height, 3, 90);
     Require(IsJpeg(rgbJpeg));
     Require(ReadFrame(rgbJpeg).components == 3 && ReadFrame(rgbJpeg).sampling == 0x11);
+    const auto jfifHeader = Decoder::Jpeg::ParseHeader(rgbJpeg);
+    Require(jfifHeader && jfifHeader->jfifBeforeFrame);
+    std::vector<std::uint8_t> arbitraryApp0 = rgbJpeg;
+    bool foundJfif = false;
+    for (std::size_t offset = 2; offset + 4 < arbitraryApp0.size();) {
+        Require(arbitraryApp0[offset] == 0xFF);
+        const std::uint8_t marker = arbitraryApp0[offset + 1];
+        const std::size_t length = static_cast<std::size_t>(arbitraryApp0[offset + 2]) << 8 | arbitraryApp0[offset + 3];
+        Require(length >= 2 && length <= arbitraryApp0.size() - offset - 2);
+        if (marker == 0xE0 && length >= 7 && std::memcmp(arbitraryApp0.data() + offset + 4, "JFIF", 5) == 0) {
+            arbitraryApp0[offset + 4] = 'N';
+            foundJfif = true;
+            break;
+        }
+        offset += 2 + length;
+    }
+    Require(foundJfif);
+    const auto arbitraryApp0Header = Decoder::Jpeg::ParseHeader(arbitraryApp0);
+    Require(arbitraryApp0Header && !arbitraryApp0Header->jfifBeforeFrame);
     const auto rgbImage = Decoder::Jpeg::Decode(rgbJpeg);
     Require(rgbImage.has_value());
     Require(rgbImage->width == width && rgbImage->height == height && rgbImage->channels == 3);

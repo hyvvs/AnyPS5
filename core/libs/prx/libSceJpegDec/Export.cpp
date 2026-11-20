@@ -127,7 +127,7 @@ bool fillImageInfo(const Decoder::Jpeg::Header& header, std::uint32_t downScale,
     info->image_height = header.height;
     info->color_space = COLOR_SPACE_UNKNOWN;
     if (header.channels == 1) info->color_space = COLOR_SPACE_GRAY;
-    if (header.channels == 3 && (header.app0BeforeFrame || (header.componentIds[0] == 1 && header.componentIds[1] == 2 && header.componentIds[2] == 3))) info->color_space = COLOR_SPACE_YCBCR;
+    if (header.channels == 3 && (header.jfifBeforeFrame || (header.componentIds[0] == 1 && header.componentIds[1] == 2 && header.componentIds[2] == 3))) info->color_space = COLOR_SPACE_YCBCR;
     info->component_number = static_cast<std::uint16_t>(header.channels);
     std::uint32_t maxHorizontal = 1;
     std::uint32_t maxVertical = 1;

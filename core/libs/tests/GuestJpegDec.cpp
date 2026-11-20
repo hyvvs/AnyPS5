@@ -59,6 +59,33 @@ static std::vector<std::uint8_t> TestJpeg(std::uint32_t width, std::uint32_t hei
     return Decoder::Jpeg::Encode(pixels, width, height, channels, 90);
 }
 
+static std::vector<std::uint8_t> JpegWithRgbIds(const std::vector<std::uint8_t>& source, bool validJfif) {
+    std::vector<std::uint8_t> jpeg = source;
+    bool sawJfif = false;
+    bool sawFrame = false;
+    for (std::size_t offset = 2; offset + 4 < jpeg.size();) {
+        Require(jpeg[offset] == 0xFF);
+        const std::uint8_t marker = jpeg[offset + 1];
+        const std::size_t length = static_cast<std::size_t>(jpeg[offset + 2]) << 8 | jpeg[offset + 3];
+        Require(length >= 2 && length <= jpeg.size() - offset - 2);
+        if (marker == 0xE0 && length >= 7 && std::memcmp(jpeg.data() + offset + 4, "JFIF", 5) == 0) {
+            sawJfif = true;
+            if (!validJfif) jpeg[offset + 4] = 'N';
+        }
+        if (marker == 0xC0 || marker == 0xC1 || marker == 0xC2) {
+            Require(jpeg[offset + 9] == 3 && length >= 17);
+            jpeg[offset + 10] = 'R';
+            jpeg[offset + 13] = 'G';
+            jpeg[offset + 16] = 'B';
+            sawFrame = true;
+            break;
+        }
+        offset += 2 + length;
+    }
+    Require(sawJfif && sawFrame);
+    return jpeg;
+}
+
 static JpegDecDecodeParam DecodeParam(const std::vector<std::uint8_t>& jpeg, std::vector<std::uint8_t>& image, std::uint32_t pitch) {
     JpegDecDecodeParam param{};
     param.jpeg_mem_addr = jpeg.data();
@@ -124,6 +151,12 @@ int main() {
     Require(info.coefficient_mem_size == 0 && info.suitable_csc_attribute == 1);
     Require(info.color_space == 1);
     for (std::uint32_t i = 0; i < 3; ++i) Require(info.component_id[i] == i + 1 && info.sampling_factor[i] == 0x11);
+    const auto jfifWithRgbIds = JpegWithRgbIds(jpeg, true);
+    const auto arbitraryApp0WithRgbIds = JpegWithRgbIds(jpeg, false);
+    const JpegDecParseParam jfifRgbParse{jfifWithRgbIds.data(), static_cast<std::uint32_t>(jfifWithRgbIds.size()), 0, 1};
+    const JpegDecParseParam arbitraryApp0RgbParse{arbitraryApp0WithRgbIds.data(), static_cast<std::uint32_t>(arbitraryApp0WithRgbIds.size()), 0, 1};
+    Require(sceJpegDecParseHeader(&jfifRgbParse, &info) == 0 && info.color_space == 1);
+    Require(sceJpegDecParseHeader(&arbitraryApp0RgbParse, &info) == 0 && info.color_space == 0);
     std::vector<std::uint8_t> progressiveHeader = jpeg;
     bool changedFrame = false;
     for (std::size_t offset = 2; offset + 3 < progressiveHeader.size();) {

@@ -2,6 +2,7 @@
 
 #include <climits>
 #include <cstddef>
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 
@@ -163,7 +164,8 @@ std::optional<Header> ParseHeader(std::span<const std::uint8_t> jpeg) {
         if (jpeg.size() - offset < 2) return std::nullopt;
         const std::size_t length = (static_cast<std::size_t>(jpeg[offset]) << 8) | jpeg[offset + 1];
         if (length < 2 || length > jpeg.size() - offset) return std::nullopt;
-        if (marker == 0xE0) header.app0BeforeFrame = true;
+        if (marker == 0xE0 && length >= 7 && std::memcmp(jpeg.data() + offset + 2, "JFIF", 5) == 0)
+            header.jfifBeforeFrame = true;
         if (marker == 0xC0 || marker == 0xC1 || marker == 0xC2) {
             if (length < 8) return std::nullopt;
             header.channels = jpeg[offset + 7];

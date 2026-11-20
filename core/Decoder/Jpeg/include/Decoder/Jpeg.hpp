@@ -22,7 +22,7 @@ struct Header {
     std::uint8_t componentIds[4]{};
     std::uint8_t samplingFactors[4]{};
     bool progressive = false;
-    bool app0BeforeFrame = false;
+    bool jfifBeforeFrame = false;
 };
 
 enum class Sampling {
