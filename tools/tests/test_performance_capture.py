@@ -201,6 +201,17 @@ class InvalidSummaries(CaptureFixture):
 
 
 class InvalidTraces(CaptureFixture):
+    def test_zero_present_native_trace_is_invalid_instead_of_raising_index_error(self):
+        summary = copy.deepcopy(self.summary)
+        summary["env"] = {"APS5_TRACE_SECONDS": "0:1", "APS5_TRACE_DIR": "<path>"}
+        summary["window"] = {"spec": "seconds 0:1", "first_present": 3, "ms": 1000.0}
+        summary["presents"] = 0
+        self.write_summary(summary)
+        raw = self.write_trace({"traceEvents": [self.trace["traceEvents"][0]]})
+        with self.assertRaisesRegex(ValueError, "at least one present"):
+            performance_capture.validate_trace(raw, summary, 42)
+        self.assertEqual(self.capture_fixture("seconds", (0, 1))["state"], "invalid")
+
     def test_invalid_trace(self):
         self.write_summary()
         for raw in (b"not gzip", gzip.compress(b"{}"), gzip.compress(b'{"traceEvents":[],"traceEvents":[]}'),

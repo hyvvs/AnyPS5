@@ -196,6 +196,8 @@ def validate_trace(raw, summary, process):
             presents.append((event["ts"], present))
     if process_names != ["AnyPS5"]:
         raise ValueError("native trace must name one AnyPS5 process")
+    if not presents:
+        raise ValueError("native trace must contain at least one present")
     if len(presents) != summary["presents"]:
         raise ValueError("native trace present count differs from its summary")
     first = summary["window"]["first_present"]
