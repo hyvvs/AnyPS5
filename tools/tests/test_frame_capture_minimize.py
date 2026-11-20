@@ -166,6 +166,40 @@ if command == 'inspect':
             self.assertEqual(result, 2)
             self.assertEqual(output.read_text(encoding="utf-8"), "keep")
 
+    def test_output_cannot_be_inside_source_capture(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            capture = root / "capture"
+            output = capture / "reduced" / "capture"
+            arguments, _, _, _ = self.empty_cli(root, output=output)
+            original = sorted(path.name for path in capture.iterdir())
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                code = frame_capture_minimize.main(arguments)
+            self.assertEqual(code, 2)
+            self.assertIn("inside the source capture", stderr.getvalue())
+            self.assertNotIn("wrote ", stdout.getvalue())
+            self.assertEqual(sorted(path.name for path in capture.iterdir()), original)
+            self.assertFalse(output.exists())
+
+    def test_output_ancestor_symlink_into_capture_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            arguments, _, _, _ = self.empty_cli(root)
+            alias = root / "alias"
+            try:
+                alias.symlink_to(root / "capture", target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(str(error))
+            output = alias / "minimized"
+            arguments[arguments.index("--output") + 1] = str(output)
+            stderr = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(stderr):
+                result = frame_capture_minimize.main(arguments)
+            self.assertEqual(result, 2)
+            self.assertIn("inside the source capture", stderr.getvalue())
+            self.assertEqual(list((root / "capture").iterdir()), [])
+
     def test_invalid_match_regex_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

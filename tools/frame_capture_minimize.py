@@ -260,6 +260,12 @@ def main(argv=None):
         return 2
     minimizer = Minimizer(args, pattern)
     try:
+        try:
+            minimizer.output.resolve().relative_to(minimizer.capture)
+        except ValueError:
+            pass
+        else:
+            raise RuntimeError("output must not be inside the source capture")
         minimizer.output.parent.mkdir(parents=True, exist_ok=True)
         description = minimizer.inspect()
         call_units = [entry["index"] for entry in description["calls"] if entry["kind"] not in {"frame-start", "end"}]
