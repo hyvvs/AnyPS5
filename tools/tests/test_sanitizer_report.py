@@ -296,6 +296,32 @@ class SanitizerReportTests(unittest.TestCase):
                       "| `plain` |  |\n"
                       "| `ub` | /a.cpp:1:2: runtime error: shift exponent 64 |\n", stdout)
 
+    def test_failure_and_error_elements_preserve_sanitizer_reports(self):
+        junit = self.write(suite(
+            case("failure_body", "fail", '<failure message="segfault">'
+                 'SUMMARY: AddressSanitizer: heap-buffer-overflow in Worker</failure>'),
+            case("error_message", "fail", '<error message="WARNING: ThreadSanitizer: data race"/>'),
+            case("failure_nested", "fail", '<failure><details>'
+                 '/src/Worker.cpp:12:7: runtime error: signed integer overflow</details></failure>'),
+            case("prefer_summary", "fail", '<system-err>ERROR: AddressSanitizer: invalid access</system-err>'
+                 '<failure>SUMMARY: AddressSanitizer: heap-buffer-overflow in Prefer</failure>'),
+        ))
+        reports = {
+            "failure_body": "SUMMARY: AddressSanitizer: heap-buffer-overflow in Worker",
+            "error_message": "WARNING: ThreadSanitizer: data race",
+            "failure_nested": "/src/Worker.cpp:12:7: runtime error: signed integer overflow",
+            "prefer_summary": "SUMMARY: AddressSanitizer: heap-buffer-overflow in Prefer",
+        }
+        self.assertEqual(sanitizer_report.reports(junit), reports)
+        summary = self.write("existing summary\n", "summary.md")
+        code, output, errors = self.run_main(junit, "--json", "--summary", summary)
+        self.assertEqual((code, errors), (1, ""))
+        self.assertEqual({row["name"]: row["report"] for row in json.loads(output)["tests"]}, reports)
+        markdown = summary.read_text(encoding="utf-8")
+        self.assertTrue(markdown.startswith("existing summary\n"))
+        self.assertIn("| `failure_body` | SUMMARY: AddressSanitizer: heap-buffer-overflow in Worker |", markdown)
+        self.assertIn("| `error_message` | WARNING: ThreadSanitizer: data race |", markdown)
+
     def test_failed_tests_without_reports_keep_the_single_column_table(self):
         code, stdout, _ = self.run_main(self.write(suite(case("plain", "fail", '<failure message=""/><system-out>FAIL</system-out>'))))
         self.assertEqual(code, 1)
