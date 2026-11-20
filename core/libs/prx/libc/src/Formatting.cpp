@@ -356,7 +356,14 @@ int ScanSource(TSource source, const char* format, bool secure, NextPointer next
         const bool suppress = *cursor == '*';
         if (suppress) ++cursor;
         unsigned long width = 0;
-        while (std::isdigit(static_cast<unsigned char>(*cursor))) width = width * 10 + static_cast<unsigned long>(*cursor++ - '0');
+        while (std::isdigit(static_cast<unsigned char>(*cursor))) {
+            const auto digit = static_cast<unsigned long>(*cursor - '0');
+            if (secure && width > (static_cast<unsigned long>(INT_MAX) - digit) / 10) {
+                throw std::out_of_range("scan field width exceeds INT_MAX");
+            }
+            width = width * 10 + digit;
+            ++cursor;
+        }
         const char* lengthStart = cursor;
         if (*cursor != '\0' && std::strchr("hljztL", *cursor)) {
             const char first = *cursor++;

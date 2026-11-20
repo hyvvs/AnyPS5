@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <stdexcept>
 #include <string>
 
 static int APS5_VABI ScanList(const char* input, const char* format, ...) {
@@ -79,6 +80,17 @@ int main() {
         Require(scan("x", "%d%d", &first, static_cast<int*>(nullptr)) == 0 && first == -1,
             "Matching failure must stop before an unreachable null destination");
         Require(scan("7 8", "%*d%d", &first) == 1 && first == 8, "Suppressed conversions must not consume destinations");
+        for (const char* format : {"%2147483648c", "%18446744073709551616c", "%18446744073709551616s", "%18446744073709551616[a-z]"}) {
+            std::array<char, 3> output{'^', '?', '$'};
+            bool rejected = false;
+            try {
+                scan("x", format, &output[1], 1u);
+            } catch (const std::out_of_range&) {
+                rejected = true;
+            }
+            Require(rejected, "Oversized scan width must be rejected before conversion");
+            Require(output == std::array<char, 3>{'^', '?', '$'}, "Oversized scan width must leave destination untouched");
+        }
     }
     for (const int count : {0, 3, 127}) {
         CheckCount<signed char>("hh", count);
