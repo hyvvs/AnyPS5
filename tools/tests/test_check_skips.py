@@ -109,6 +109,25 @@ class SkipJsonTests(unittest.TestCase):
                         self.assertEqual(output.getvalue(), "")
                         self.assertIn("testcase 'a' is listed more than once", errors.getvalue())
 
+    def test_skipped_testcase_cannot_also_contain_a_failure_or_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "contradictory.xml"
+            for element in ("failure", "error"):
+                for mode in ([], ["--json"], ["--list"]):
+                    with self.subTest(element=element, mode=mode):
+                        report.write_text(
+                            '<testsuite><testcase name="guest_probe">'
+                            '<skipped message="SKIP_RETURN_CODE=77"/>'
+                            '<system-out>skipped, the device lacks geometryShader</system-out>'
+                            f'<{element} message="execution failed"/>'
+                            '</testcase></testsuite>', encoding="utf-8")
+                        output, errors = io.StringIO(), io.StringIO()
+                        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors), self.assertRaises(SystemExit) as caught:
+                            check_skips.main([str(report), "--job", "linux", *mode])
+                        self.assertEqual(caught.exception.code, 2)
+                        self.assertEqual(output.getvalue(), "")
+                        self.assertIn("guest_probe", errors.getvalue())
+
     def test_current_device_limitations_match_text_and_json(self):
         cases = (
             ("cannot create a raw socket", 0, 0),
