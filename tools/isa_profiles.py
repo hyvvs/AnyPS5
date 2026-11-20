@@ -1,5 +1,8 @@
 import hashlib
+import os
 import re
+import secrets
+import stat
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -188,4 +191,17 @@ def gfx1013_forms_text(rdna1_xmltext, rdna2_xmltext):
 
 
 def write_gfx1013_forms(path, rdna1_xmltext, rdna2_xmltext):
-    Path(path).write_bytes(gfx1013_forms_text(rdna1_xmltext, rdna2_xmltext).encode("utf-8"))
+    content = gfx1013_forms_text(rdna1_xmltext, rdna2_xmltext).encode("utf-8")
+    destination = Path(path)
+    candidate = destination.parent / (".gfx1013-forms-" + secrets.token_hex(16))
+    temporary = None
+    try:
+        with candidate.open("xb") as output:
+            temporary = candidate
+            output.write(content)
+        if os.name != "nt" and destination.is_file() and not destination.is_symlink():
+            candidate.chmod(stat.S_IMODE(destination.stat().st_mode))
+        os.replace(candidate, destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)

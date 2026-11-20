@@ -330,6 +330,56 @@ class InventoryTextTests(unittest.TestCase):
             self.assertEqual(existing.read_bytes(), b"old\n")
             self.assertFalse(absent.exists())
 
+    def test_failed_inventory_promotion_preserves_existing_and_absent_targets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            existing = Path(directory) / "existing.txt"
+            existing.write_bytes(b"previous complete inventory\n")
+            absent = Path(directory) / "absent.txt"
+            with pinned(rdna1=RDNA1, rdna2=RDNA2):
+                for target in (existing, absent):
+                    before = target.read_bytes() if target.exists() else None
+                    with self.subTest(target=target.name), patch("os.replace", side_effect=OSError("promotion failed")) as replace:
+                        with self.assertRaisesRegex(OSError, "promotion failed"):
+                            isa_profiles.write_gfx1013_forms(target, RDNA1, RDNA2)
+                        replace.assert_called_once()
+                    self.assertEqual(target.read_bytes() if target.exists() else None, before)
+            self.assertEqual(list(Path(directory).iterdir()), [existing])
+
+    def test_partial_inventory_write_preserves_existing_and_absent_targets(self):
+        original_open = Path.open
+
+        class FailAfterPartialWrite:
+            def __init__(self, output):
+                self.output = output
+
+            def __enter__(self):
+                self.output.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self.output.__exit__(*args)
+
+            def write(self, data):
+                self.output.write(data[:32])
+                raise OSError("disk full during write")
+
+        def failing_open(path, mode="r", *args, **kwargs):
+            output = original_open(path, mode, *args, **kwargs)
+            return FailAfterPartialWrite(output) if mode in ("wb", "xb") else output
+
+        with tempfile.TemporaryDirectory() as directory:
+            existing = Path(directory) / "existing.txt"
+            existing.write_bytes(b"previous complete inventory\n")
+            absent = Path(directory) / "absent.txt"
+            with pinned(rdna1=RDNA1, rdna2=RDNA2):
+                for target in (existing, absent):
+                    before = target.read_bytes() if target.exists() else None
+                    with self.subTest(target=target.name), patch.object(Path, "open", failing_open):
+                        with self.assertRaisesRegex(OSError, "disk full during write"):
+                            isa_profiles.write_gfx1013_forms(target, RDNA1, RDNA2)
+                    self.assertEqual(target.read_bytes() if target.exists() else None, before)
+            self.assertEqual(list(Path(directory).iterdir()), [existing])
+
 
 if __name__ == "__main__":
     unittest.main()
