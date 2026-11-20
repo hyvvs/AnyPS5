@@ -191,8 +191,13 @@ def audit_text(text):
 def audit(libraries):
     report = []
     for library in libraries:
+        source_root = library.resolve()
         for source in sorted(library.rglob("*.cpp")):
             if "tests" in source.relative_to(library).parts:
+                continue
+            try:
+                source.resolve().relative_to(source_root)
+            except ValueError:
                 continue
             text = source_code(source.read_text(encoding="utf-8", errors="ignore"))
             for entry in audit_text(text):

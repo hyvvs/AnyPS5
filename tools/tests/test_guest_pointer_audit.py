@@ -268,6 +268,38 @@ class CommandLineTests(unittest.TestCase):
                 self.assertEqual(raised.exception.code, 2)
                 self.assertIn("not a library under core/libs/prx:", errors.getvalue())
 
+    def test_source_symlink_outside_library_is_not_a_guest_export(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            library = root / "libExample"
+            library.mkdir()
+            (library / "Inside.cpp").write_text("int APS5_VABI sceInside(int* p) { *p = 1; return 0; }\n", encoding="utf-8")
+            outside = root / "Outside.cpp"
+            outside.write_text("int APS5_VABI sceOutside(int* p) { *p = 2; return 0; }\n", encoding="utf-8")
+            try:
+                (library / "Outside.cpp").symlink_to(outside)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(str(error))
+            with mock.patch.object(guest_pointer_audit, "ROOT", root):
+                self.assertEqual([entry["function"] for entry in guest_pointer_audit.audit([library])], ["sceInside"])
+
+    def test_source_resolution_cannot_escape_library_even_without_symlink_privileges(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            library = root / "libExample"
+            library.mkdir()
+            inside = library / "Inside.cpp"
+            escaped = library / "Escaped.cpp"
+            for source, name in ((inside, "sceInside"), (escaped, "sceOutside")):
+                source.write_text(f"int APS5_VABI {name}(int* p) {{ *p = 1; return 0; }}\n", encoding="utf-8")
+            original = Path.resolve
+
+            def resolve(path, *args, **kwargs):
+                return root / "Elsewhere.cpp" if path == escaped else original(path, *args, **kwargs)
+
+            with mock.patch.object(guest_pointer_audit, "ROOT", root), mock.patch.object(Path, "resolve", resolve):
+                self.assertEqual([entry["function"] for entry in guest_pointer_audit.audit([library])], ["sceInside"])
+
 
     def test_split_top_level_ignores_commas_inside_brackets(self):
         parts = guest_pointer_audit.split_top_level("a, f(b, c), [d, e]")
