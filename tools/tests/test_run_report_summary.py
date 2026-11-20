@@ -311,6 +311,30 @@ class RunReportSummaryTests(unittest.TestCase):
                     self.assertEqual(result.stdout, "")
                     self.assertIn("run_report_summary:", result.stderr)
 
+    def test_cli_rejects_conflicting_duplicate_json_fields_in_nested_and_top_level_objects(self):
+        report = self.report("stop-none.json")
+        report["run"]["exit"] = "clean"
+        text = json.dumps(report)
+        self.assertIn('"exit": "clean"', text)
+        self.assertIn('"run": {', text)
+        cases = (
+            (text.replace('"exit": "clean"', '"exit": "abort", "exit": "clean"', 1), "exit"),
+            (text.replace('"run": {', '"run": {"exit": "abort"}, "run": {', 1), "run"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "anyps5-report.json"
+            for contents, duplicate in cases:
+                with self.subTest(duplicate=duplicate):
+                    path.write_text(contents, encoding="utf-8")
+                    completed = subprocess.run(
+                        [sys.executable, str(ROOT / "tools/run_report_summary.py"), str(path)],
+                        capture_output=True, text=True, timeout=15,
+                    )
+                    self.assertEqual(completed.returncode, 2, completed.stderr)
+                    self.assertEqual(completed.stdout, "")
+                    self.assertIn(f"duplicate JSON field {duplicate!r}", completed.stderr)
+                    self.assertNotIn("Traceback", completed.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

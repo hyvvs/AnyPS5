@@ -5,6 +5,15 @@ import sys
 from pathlib import Path
 
 
+def unique_json_fields(pairs):
+    result = {}
+    for name, value in pairs:
+        if name in result:
+            raise ValueError(f"duplicate JSON field {name!r}")
+        result[name] = value
+    return result
+
+
 def text(value):
     if not isinstance(value, str) or not value:
         return "unknown"
@@ -143,7 +152,7 @@ def main():
     parser.add_argument("report", type=Path, help="path to anyps5-report.json")
     args = parser.parse_args()
     try:
-        report = json.loads(args.report.read_text(encoding="utf-8-sig"))
+        report = json.loads(args.report.read_text(encoding="utf-8-sig"), object_pairs_hook=unique_json_fields)
         if hasattr(sys.stdout, "reconfigure"):
             sys.stdout.reconfigure(encoding="utf-8")
         print(render(report))
