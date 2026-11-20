@@ -70,9 +70,9 @@ def check_of(node):
     if node.get("__typename") == "StatusContext":
         state = str(node.get("state") or "").lower()
         done = state not in {"pending", "expected"}
-        return {"id": 0, "name": node.get("context"), "done": done,
+        return {"kind": "status", "id": 0, "name": node.get("context"), "done": done,
                 "conclusion": {"success": "success"}.get(state, "failure") if done else None}
-    return {"id": node.get("databaseId") or 0, "name": node.get("name"),
+    return {"kind": "run", "id": node.get("databaseId") or 0, "name": node.get("name"),
             "done": str(node.get("status") or "").lower() == "completed",
             "conclusion": str(node.get("conclusion") or "").lower() or None}
 
@@ -106,10 +106,10 @@ def pull(node):
 def latest_checks(checks):
     latest = {}
     for check in checks:
-        name = check["name"]
-        if name not in latest or check["id"] > latest[name]["id"]:
-            latest[name] = check
-    return [check for name, check in latest.items() if name not in BOT_CHECKS]
+        key = (check["kind"], check["name"])
+        if key not in latest or check["id"] > latest[key]["id"]:
+            latest[key] = check
+    return [check for (_, name), check in latest.items() if name not in BOT_CHECKS]
 
 
 def blockers(pr):

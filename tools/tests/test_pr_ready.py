@@ -101,6 +101,24 @@ class BlockerTests(unittest.TestCase):
         data["commits"]["nodes"][0]["commit"]["statusCheckRollup"]["contexts"]["nodes"][-1]["state"] = "FAILURE"
         self.assertEqual(pr_ready.blockers(pr_ready.pull(data)), ["failing: ci/other"])
 
+    def test_failing_status_context_is_not_hidden_by_a_passing_check_run_with_the_same_name(self):
+        data = node()
+        contexts = data["commits"]["nodes"][0]["commit"]["statusCheckRollup"]["contexts"]["nodes"]
+        contexts.append({"__typename": "StatusContext", "context": "conventions", "state": "FAILURE"})
+        self.assertEqual(pr_ready.blockers(pr_ready.pull(data)), ["failing: conventions"])
+
+    def test_pending_status_context_is_not_hidden_by_a_passing_check_run_with_the_same_name(self):
+        data = node()
+        contexts = data["commits"]["nodes"][0]["commit"]["statusCheckRollup"]["contexts"]["nodes"]
+        contexts.append({"__typename": "StatusContext", "context": "conventions", "state": "PENDING"})
+        self.assertEqual(pr_ready.blockers(pr_ready.pull(data)), ["still running: conventions"])
+
+    def test_passing_status_and_passing_check_run_with_the_same_name_are_ready(self):
+        data = node()
+        contexts = data["commits"]["nodes"][0]["commit"]["statusCheckRollup"]["contexts"]["nodes"]
+        contexts.append({"__typename": "StatusContext", "context": "conventions", "state": "SUCCESS"})
+        self.assertEqual(pr_ready.blockers(pr_ready.pull(data)), [])
+
     def test_more_checks_than_one_page_is_not_ready(self):
         self.assertEqual(pr_ready.blockers(make(more=True)), ["too many checks to read"])
 
@@ -367,19 +385,21 @@ class PaginationTests(unittest.TestCase):
 class CheckMappingTests(unittest.TestCase):
     def test_check_of_maps_commit_status_states(self):
         pending = pr_ready.check_of({'__typename': 'StatusContext', 'context': 'ci', 'state': 'PENDING'})
-        self.assertEqual(pending, {'id': 0, 'name': 'ci', 'done': False, 'conclusion': None})
+        self.assertEqual(pending, {'kind': 'status', 'id': 0, 'name': 'ci', 'done': False, 'conclusion': None})
         self.assertEqual(pr_ready.check_of({'__typename': 'StatusContext', 'context': 'ci', 'state': 'SUCCESS'})['conclusion'], 'success')
         self.assertEqual(pr_ready.check_of({'__typename': 'StatusContext', 'context': 'ci', 'state': 'ERROR'})['conclusion'], 'failure')
 
     def test_check_of_maps_check_runs_and_refuses_non_objects(self):
         run = pr_ready.check_of({'databaseId': 7, 'name': 'build', 'status': 'COMPLETED', 'conclusion': 'SUCCESS'})
-        self.assertEqual(run, {'id': 7, 'name': 'build', 'done': True, 'conclusion': 'success'})
+        self.assertEqual(run, {'kind': 'run', 'id': 7, 'name': 'build', 'done': True, 'conclusion': 'success'})
         with self.assertRaisesRegex(ValueError, 'check is not an object'):
             pr_ready.check_of([])
 class LatestCheckTests(unittest.TestCase):
     def test_latest_checks_keeps_the_newest_run_and_drops_bot_checks(self):
-        checks = [{'name': 'a', 'id': 1}, {'name': 'a', 'id': 3}, {'name': 'b', 'id': 2}, {'name': 'labels', 'id': 9}]
-        self.assertEqual(pr_ready.latest_checks(checks), [{'name': 'a', 'id': 3}, {'name': 'b', 'id': 2}])
+        checks = [{'kind': 'run', 'name': 'a', 'id': 1}, {'kind': 'run', 'name': 'a', 'id': 3},
+                  {'kind': 'run', 'name': 'b', 'id': 2}, {'kind': 'run', 'name': 'labels', 'id': 9}]
+        self.assertEqual(pr_ready.latest_checks(checks), [{'kind': 'run', 'name': 'a', 'id': 3},
+                                                          {'kind': 'run', 'name': 'b', 'id': 2}])
 class LabelApplyTests(unittest.TestCase):
     def test_apply_dry_run_reports_queue_label_changes_without_writing(self):
         import contextlib, io
