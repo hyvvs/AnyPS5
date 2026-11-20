@@ -215,6 +215,12 @@ def collect_docs(source, output):
     documents = sorted(document for document in source.rglob("*.md") if document.is_file())
     if not documents:
         raise RuntimeError(f"No Markdown documents found in {source}")
+    source_root = source.resolve()
+    for document in documents:
+        try:
+            document.resolve().relative_to(source_root)
+        except ValueError as error:
+            raise RuntimeError(f"Document outside documentation source: {document}") from error
     names = {file.name.casefold() for file in output.iterdir()} if output.exists() else set()
     for document in documents:
         if document.name.casefold() in names:

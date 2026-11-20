@@ -1724,6 +1724,59 @@ class DocumentationAssetsTests(unittest.TestCase):
             package_release.collect_docs(source, output)
             self.assertEqual({file.name: file.read_text(encoding="utf-8") for file in output.iterdir()}, {"A.md": "A", "B.md": "B"})
 
+    def test_document_source_symlink_cannot_package_file_outside_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, output = root / "docs", root / "assets"
+            source.mkdir()
+            (source / "Guide.md").write_bytes(b"public guide")
+            outside = root / "private.md"
+            outside.write_bytes(b"outside docs")
+            alias = source / "External.md"
+            try:
+                alias.symlink_to(outside)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(str(error))
+            with self.assertRaisesRegex(RuntimeError, "outside documentation source"):
+                package_release.collect_docs(source, output)
+            self.assertFalse(output.exists())
+            self.assertEqual(outside.read_bytes(), b"outside docs")
+
+    def test_document_source_symlink_inside_source_is_packaged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, output = root / "docs", root / "assets"
+            (source / "nested").mkdir(parents=True)
+            target = source / "nested" / "Target.md"
+            target.write_bytes(b"in source")
+            try:
+                (source / "Alias.md").symlink_to(target)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(str(error))
+            package_release.collect_docs(source, output)
+            self.assertEqual({file.name: file.read_bytes() for file in output.iterdir()},
+                             {"Alias.md": b"in source", "Target.md": b"in source"})
+
+    def test_document_source_rejects_resolved_escape_without_symlink_privileges(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, output = root / "docs", root / "assets"
+            source.mkdir()
+            document = source / "External.md"
+            document.write_bytes(b"fixture")
+            outside = root / "private.md"
+            outside.write_bytes(b"outside")
+            real_resolve = Path.resolve
+
+            def resolve(path, *args, **kwargs):
+                if path == document:
+                    return outside
+                return real_resolve(path, *args, **kwargs)
+
+            with patch.object(Path, "resolve", resolve), self.assertRaisesRegex(RuntimeError, "outside documentation source"):
+                package_release.collect_docs(source, output)
+            self.assertFalse(output.exists())
+
     def test_existing_case_collision_preserves_assets(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "source"
