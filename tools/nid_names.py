@@ -82,9 +82,16 @@ def load_db(path, *, offline=False):
 def source_files(root):
     flavor = PureWindowsPath if os.name == "nt" else Path
     root_flavored = flavor(str(root))
-    return (path for path in sorted(root.rglob("*.cpp"))
-            if not any(part.lower() in {"test", "tests"}
-                       for part in flavor(str(path)).relative_to(root_flavored).parts[:-1]))
+    resolved_root = root.resolve()
+    for path in sorted(root.rglob("*.cpp")):
+        if any(part.lower() in {"test", "tests"}
+               for part in flavor(str(path)).relative_to(root_flavored).parts[:-1]):
+            continue
+        try:
+            path.resolve().relative_to(resolved_root)
+        except ValueError as error:
+            raise ValueError(f"{path}: source file resolves outside source root {root}") from error
+        yield path
 
 
 def source_aliases(text):

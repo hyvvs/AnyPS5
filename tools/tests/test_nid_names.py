@@ -29,6 +29,38 @@ def download_response(payload, error=None):
     return response
 
 
+class SourceBoundaryTests(unittest.TestCase):
+    def test_source_scan_rejects_resolved_files_outside_root(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "libs"
+            root.mkdir()
+            source = root / "Export.cpp"
+            source.write_text('APS5_EXPORT("AAAAAAAAAAA", exampleUnknown);', encoding="utf-8")
+            outside = base / "private.cpp"
+            outside.write_text("not project source", encoding="utf-8")
+            original_resolve = Path.resolve
+
+            def resolve(path, *args, **kwargs):
+                return outside if path == source else original_resolve(path, *args, **kwargs)
+
+            with patch.object(Path, "resolve", resolve):
+                with self.assertRaisesRegex(ValueError, "outside source root"):
+                    list(nid_names.source_files(root))
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX symlinks")
+    def test_real_external_source_symlink_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "libs"
+            root.mkdir()
+            outside = base / "private.cpp"
+            outside.write_text("private", encoding="utf-8")
+            (root / "Alias.cpp").symlink_to(outside)
+            with self.assertRaisesRegex(ValueError, "outside source root"):
+                list(nid_names.source_files(root))
+
+
 class DatabaseCacheTests(unittest.TestCase):
     @contextlib.contextmanager
     def database_server(self, payload):
