@@ -260,6 +260,51 @@ class PrepareFailureCleanupTests(ReleaseNotesCase):
             prepare_release_notes.prepare_notes(self.source, self.body, self.full)
         self.assertOutputsKept()
 
+    def test_interrupted_completed_rename_restores_both_release_outputs(self):
+        real_replace = os.replace
+        for existing in (False, True):
+            for stage in (("promote", OSError), ("promote", KeyboardInterrupt), ("backup", OSError),
+                          ("backup", KeyboardInterrupt)):
+                if not existing and stage[0] == "backup":
+                    continue
+                for failed_name in ("full.md", "body.md"):
+                    with self.subTest(existing=existing, stage=stage[0], kind=stage[1].__name__, failed=failed_name), \
+                            tempfile.TemporaryDirectory() as directory:
+                        root = Path(directory)
+                        source, output = root / "source.json", root / "output"
+                        output.mkdir()
+                        body, full = output / "body.md", output / "full.md"
+                        source.write_text(json.dumps({"body": "new release notes"}), encoding="utf-8")
+                        previous = {}
+                        if existing:
+                            for file in (body, full):
+                                file.write_bytes(("previous " + file.name).encode("ascii"))
+                                previous[file.name] = file.read_bytes()
+                        interrupted = False
+
+                        def replace(before, after):
+                            nonlocal interrupted
+                            before, after = Path(before), Path(after)
+                            renamed = real_replace(before, after)
+                            if not interrupted:
+                                if stage[0] == "promote":
+                                    fail = after.name == failed_name and after.parent == output and before.name.startswith(".release-notes-")
+                                else:
+                                    fail = before.name == failed_name and before.parent == output and after.name.startswith(".release-notes-")
+                                if fail:
+                                    interrupted = True
+                                    raise stage[1]("interrupted after rename")
+                            return renamed
+
+                        with patch.object(prepare_release_notes.os, "replace", replace), \
+                                self.assertRaisesRegex(stage[1], "interrupted after rename"):
+                            prepare_release_notes.prepare_notes(source, body, full)
+                        self.assertTrue(interrupted)
+                        self.assertEqual({path.name: path.read_bytes() for path in output.iterdir()}, previous)
+                        prepare_release_notes.prepare_notes(source, body, full)
+                        self.assertEqual({path.name: path.read_bytes() for path in output.iterdir()},
+                                         {"body.md": b"new release notes", "full.md": b"new release notes"})
+
 
 class ReleaseBodyTests(unittest.TestCase):
     def test_notes_at_or_below_limit_are_returned_unchanged(self):

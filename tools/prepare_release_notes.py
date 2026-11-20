@@ -88,11 +88,21 @@ def prepare_notes(source, body, full, check=False):
             for temporary, target in staged:
                 if target.exists():
                     backup = target.parent / (".release-notes-" + secrets.token_hex(16))
-                    os.replace(target, backup)
+                    try:
+                        os.replace(target, backup)
+                    except BaseException:
+                        if backup.exists() and not target.exists():
+                            backed_up.append((target, backup))
+                        raise
                     backed_up.append((target, backup))
-                os.replace(temporary, target)
+                try:
+                    os.replace(temporary, target)
+                except BaseException:
+                    if not temporary.exists() and target.exists():
+                        promoted.append(target)
+                    raise
                 promoted.append(target)
-        except OSError as promotion_error:
+        except BaseException as promotion_error:
             rollback_errors = []
             for target in reversed(promoted):
                 try:
