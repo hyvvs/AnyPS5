@@ -64,6 +64,18 @@ class Tests(unittest.TestCase):
         path.write_text("[]",encoding="utf-8")
         self.assertEqual(json.loads(self.run_tool(path).stdout),{"entries":0,"units":[]})
 
+    def test_invalid_optional_output_types_fail_without_emitting_json(self):
+        path = self.root / "compile_commands.json"
+        for output in (None, True, float("nan"), ["file.o"], {"path": "file.o"}):
+            with self.subTest(output=output):
+                entry = {"directory": "build", "file": "unit.c", "command": "compiler -c unit.c", "output": output}
+                path.write_text(json.dumps([entry]), encoding="utf-8")
+                result = self.run_tool(path)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("output must be a string", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
     def test_optional_outputs_distinguish_identical_compile_actions(self):
         path = self.root / "compile_commands.json"
         arguments = ["missing-compiler", "-c", "a.c"]
