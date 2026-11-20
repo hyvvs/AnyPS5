@@ -39,8 +39,8 @@ def parse_events(lines):
         operation = next((item for item in OPERATIONS if detail.startswith(item + " ")), None)
         if operation is None:
             continue
-        address = RANGE.search(detail)
-        if address is None:
+        address = RANGE.match(detail, len(operation) + 1)
+        if address is None or address.end() < len(detail) and not detail[address.end()].isspace():
             raise ValueError(f"line {number}: {operation} event has no address range")
         events.append(MappingEvent(number, operation, int(address["address"], 16),
                                    int(address["size"], 16), detail))

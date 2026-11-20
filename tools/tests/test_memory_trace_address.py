@@ -56,6 +56,13 @@ class ParseTests(FeatureRequired):
         with self.assertRaisesRegex(ValueError, "line 1: protect event has no address range"):
             trace.parse_events(["[memory] protect with a truncated record\n"])
 
+    def test_mapping_range_must_be_the_first_argument_not_later_metadata(self):
+        with self.assertRaisesRegex(ValueError, "line 1: map file event has no address range"):
+            trace.parse_events(["[memory] map file missing-mapping offset=0x1000+0x20 prot=0x1\n"])
+        with self.assertRaisesRegex(ValueError, "line 1: map file event has no address range"):
+            trace.parse_events(["[memory] map file 0x4000+0x20offset=0x1000 prot=0x1\n"])
+        self.assertEqual(trace.parse_events(["[memory] map file 0x4000+0x200 offset=0x1000+0x20 prot=0x1\n"])[0].address, 0x4000)
+
 
 class RangeTests(FeatureRequired):
     def test_accepts_decimal_and_hex_ranges(self):
