@@ -314,6 +314,34 @@ class TraceJsonNestingTests(unittest.TestCase):
                     self.assertIsInstance(error.exception.__cause__, RecursionError)
                     self.assertEqual(path.read_bytes(), original)
 
+    def test_raw_trace_duplicate_fields_cannot_change_recorded_events(self):
+        captures = (
+            '{"traceEvents":[],"traceEvents":[{"name":"Driver.Packet","ph":"X","tid":1,"ts":0,"dur":1000}]}',
+            '{"traceEvents":[{"name":"Driver.Packet","ph":"X","tid":1,"ts":0,"ts":5000,"dur":1000}]}',
+            '{"traceEvents":[{"name":"thread_name","ph":"M","tid":1,"args":{"name":"original","name":"changed"}}]}',
+        )
+        for content in captures:
+            for compressed in (False, True):
+                with self.subTest(content=content, compressed=compressed):
+                    path = Path(self.directory.name) / ("ambiguous.json.gz" if compressed else "ambiguous.json")
+                    raw = content.encode("utf-8")
+                    original = gzip.compress(raw) if compressed else raw
+                    path.write_bytes(original)
+                    with self.assertRaisesRegex(ValueError, "duplicate JSON field") as error:
+                        trace_digest.load_trace(path)
+                    self.assertIn(str(path), str(error.exception))
+                    output = Path(self.directory.name) / "timeline.html"
+                    for command in ((trace_digest.__file__, str(path), "--json"),
+                                    (str(Path(trace_digest.__file__).with_name("trace_timeline.py")), str(path), "-o", str(output))):
+                        result = subprocess.run([sys.executable, *command], capture_output=True, text=True,
+                                                encoding="utf-8", timeout=20)
+                        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                        self.assertEqual(result.stdout, "")
+                        self.assertIn("duplicate JSON field", result.stderr)
+                        self.assertNotIn("Traceback", result.stderr)
+                        self.assertFalse(output.exists())
+                    self.assertEqual(path.read_bytes(), original)
+
     def test_excessive_trace_json_nesting_produces_only_a_cli_error(self):
         for opening, closing, compressed, args in (("[", "]", False, ()), ('{"nested":', "}", True, ("--json",)),
                                                    ("[", "]", True, ()), ('{"nested":', "}", False, ("--json",))):
