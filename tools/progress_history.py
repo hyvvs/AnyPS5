@@ -143,11 +143,22 @@ def cache_signature():
     return digest.hexdigest()
 
 
+def unique_cache_fields(pairs):
+    result = {}
+    for name, value in pairs:
+        if name in result:
+            raise ValueError(f"duplicate history cache field {name!r}")
+        result[name] = value
+    return result
+
+
 def load_cache(path, signature):
     if not path.exists():
         return {}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_cache_fields)
+    except ValueError as error:
+        raise ValueError(f"{path}: {error}") from error
     except RecursionError as error:
         raise ValueError(f"{path}: history cache JSON is too deeply nested") from error
     if not isinstance(data, dict) or type(data.get("schema_version")) is not int or data["schema_version"] != 2 or not isinstance(data.get("rules"), str) or not isinstance(data.get("commits"), dict):

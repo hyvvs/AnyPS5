@@ -366,6 +366,29 @@ class ProgressHistoryTests(unittest.TestCase):
                         progress_history.collect("HEAD", cache)
                     self.assertEqual(cache.read_bytes(), contents)
 
+    def test_duplicate_cache_fields_cannot_override_saved_progress(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "history.json"
+            sha = "a" * 40
+            record = {"libraries": {"done": 1, "total": 2, "percent": 50},
+                      "shaders": {"done": 0, "total": 0, "percent": 0}, "shader_metric": "decoded"}
+            cache = {"schema_version": 2, "rules": "pinned", "commits": {sha: record}}
+            valid = json.dumps(cache)
+            path.write_text(valid, encoding="utf-8")
+            self.assertEqual(progress_history.load_cache(path, "pinned"), {sha: record})
+            duplicates = (
+                valid.replace('"schema_version": 2', '"schema_version": 1, "schema_version": 2', 1),
+                valid.replace(f'"{sha}": {{', f'"{sha}": null, "{sha}": {{', 1),
+                valid.replace('"done": 1', '"done": 0, "done": 1', 1),
+            )
+            for index, contents in enumerate(duplicates):
+                with self.subTest(index=index):
+                    path.write_text(contents, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "duplicate history cache field") as raised:
+                        progress_history.load_cache(path, "pinned")
+                    self.assertIn(str(path), str(raised.exception))
+                    self.assertEqual(path.read_text(encoding="utf-8"), contents)
+
     def test_cache_rejects_invalid_shader_metric(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
