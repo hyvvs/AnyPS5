@@ -47,6 +47,14 @@ class SourceBoundaryTests(unittest.TestCase):
             with patch.object(Path, "resolve", resolve):
                 with self.assertRaisesRegex(ValueError, "outside source root"):
                     list(nid_names.source_files(root))
+                output = io.StringIO()
+                errors = io.StringIO()
+                with patch.object(nid_names, "PRX", root), contextlib.redirect_stdout(output), \
+                     contextlib.redirect_stderr(errors), self.assertRaises(SystemExit) as caught:
+                    nid_names.main(["--where", "--nid", "AAAAAAAAAAA"])
+                self.assertEqual(caught.exception.code, 2)
+                self.assertEqual(output.getvalue(), "")
+                self.assertIn("outside source root", errors.getvalue())
 
     @unittest.skipUnless(os.name == "posix", "requires POSIX symlinks")
     def test_real_external_source_symlink_is_rejected(self):
