@@ -50,6 +50,20 @@ class CatalogLoadingTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "cannot read probe catalog"):
                 probe_catalog.read_catalog(path.with_name("missing"))
 
+    def test_duplicate_json_fields_are_rejected_at_every_catalog_depth(self):
+        original = json.dumps(self.catalog)
+        for field, existing in (("schema_version", "1"),
+                                ("id", '"v-add-f32-edge-values"'),
+                                ("name", '"positive-zero"'),
+                                ("input", "[0, 0, 0, 0]")):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "catalog"
+                entry = f'"{field}": {existing}'
+                self.assertIn(entry, original)
+                path.write_text(original.replace(entry, f"{entry}, {entry}", 1), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, f"duplicate JSON field '{field}'"):
+                    probe_catalog.read_catalog(path)
+
     def test_catalog_rejects_unsupported_versions_and_duplicate_probe_ids(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "catalog"
