@@ -64,6 +64,22 @@ class Tests(unittest.TestCase):
         path.write_text("[]",encoding="utf-8")
         self.assertEqual(json.loads(self.run_tool(path).stdout),{"entries":0,"units":[]})
 
+    def test_duplicate_compilation_database_fields_cannot_hide_conflicting_raw_records(self):
+        path = self.root / "compile_commands.json"
+        for field, first, second in (("file", "wrong.cpp", "actual.cpp"),
+                                     ("command", "compiler -c wrong.cpp", "compiler -c actual.cpp")):
+            with self.subTest(field=field):
+                raw = ('[{"directory":"build","file":"actual.cpp","command":"compiler -c actual.cpp",'
+                       f'"{field}":{json.dumps(first)},"{field}":{json.dumps(second)}}}]')
+                path.write_text(raw, encoding="utf-8")
+                original = path.read_bytes(), path.stat().st_mtime_ns
+                result = self.run_tool(path)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertIn(f"duplicate compilation database field '{field}'", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertEqual((path.read_bytes(), path.stat().st_mtime_ns), original)
+
     def test_optional_outputs_distinguish_identical_compile_actions(self):
         path = self.root / "compile_commands.json"
         arguments = ["missing-compiler", "-c", "a.c"]

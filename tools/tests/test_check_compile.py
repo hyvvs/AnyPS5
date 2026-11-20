@@ -581,6 +581,19 @@ class CheckCompilePathSelectionTests(CheckCompileFixture):
 
 
 class CheckCompileDatabaseTests(CheckCompileFixture):
+    def test_duplicate_compile_database_fields_are_rejected_before_planning_commands(self):
+        source = self.source("unit.cpp")
+        directory = json.dumps(str(self.build))
+        file = json.dumps(str(source))
+        database = (f'[{{"directory": {directory}, "file": "misleading.cpp", "file": {file}, '
+                    f'"arguments": ["missing-compiler", "-c", {file}]}}]')
+        (self.build / "compile_commands.json").write_text(database, encoding="utf-8")
+        result = self.tool("--dry-run", "--build", str(self.build), str(source))
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("duplicate compilation database field 'file'", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_invalid_argument_arrays_are_rejected_without_a_traceback(self):
         source = self.source("unit.cpp")
         for arguments in (None, [], "compiler -c unit.cpp", ["compiler", 3], [""]):

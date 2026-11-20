@@ -76,9 +76,18 @@ def validate_arguments(arguments):
         raise ValueError("arguments must be a nonempty list of strings with an executable")
 
 
+def unique_json_fields(pairs):
+    result = {}
+    for name, value in pairs:
+        if name in result:
+            raise ValueError(f"duplicate compilation database field {name!r}")
+        result[name] = value
+    return result
+
+
 def compilation_database(text, source, skip_empty_commands=False):
     try:
-        database = json.loads(text)
+        database = json.loads(text, object_pairs_hook=unique_json_fields)
     except RecursionError as error:
         raise ValueError(f"{source}: compilation database is nested too deeply") from error
     if not isinstance(database, list):
