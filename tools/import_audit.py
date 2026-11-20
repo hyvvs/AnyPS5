@@ -96,6 +96,14 @@ def elf_program_dynamic_symbols(path, data, section_symbol_count=None):
                 take(data, offset, file_size, path, "load segment")
             loads.append(segment)
 
+    file_backed = sorted((segment for segment in loads if segment[5]), key=lambda segment: segment[3])
+    for index, segment in enumerate(file_backed):
+        for following in file_backed[index + 1:]:
+            if following[3] >= segment[3] + segment[5]:
+                break
+            if following[2] - following[3] != segment[2] - segment[3]:
+                raise AuditError(f"{path}: overlapping ELF load segments have conflicting file mappings")
+
     def file_offset(address, size, what):
         for segment in loads:
             _, _, offset, virtual, _, file_size, _, _ = segment

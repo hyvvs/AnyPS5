@@ -3015,6 +3015,32 @@ class ImportAuditTests(unittest.TestCase):
                     else:
                         self.assertEqual(import_audit.elf_program_dynamic_symbols(Path("split.prx"), image), expected)
 
+    def test_sectionless_elf_rejects_conflicting_file_backed_load_aliases(self):
+        original = bytearray(build_sectionless_elf([("alpha", 0, GLOBAL_FUNCTION), ("beta", 1, GLOBAL_FUNCTION)]))
+        offset = struct.unpack_from("<Q", original, 32)[0]
+        first = struct.unpack_from("<IIQQQQQQ", original, offset)
+        second = struct.unpack_from("<IIQQQQQQ", original, offset + 56)
+        for reverse in (False, True):
+            with self.subTest(reverse=reverse):
+                image = bytearray(original)
+                alias = (1, first[1], first[2] + 8, first[3], first[4], first[5] - 8, first[6] - 8, first[7])
+                headers = ([alias, first, second] if reverse else [first, second, alias])
+                table = len(image)
+                image.extend(b"".join(struct.pack("<IIQQQQQQ", *header) for header in headers))
+                struct.pack_into("<Q", image, 32, table)
+                struct.pack_into("<H", image, 56, len(headers))
+                with self.assertRaisesRegex(import_audit.AuditError, "overlapping ELF load"):
+                    import_audit.elf_program_dynamic_symbols(Path("ambiguous.prx"), image)
+
+        image = bytearray(original)
+        table = len(image)
+        image.extend(struct.pack("<IIQQQQQQ", *first))
+        image.extend(struct.pack("<IIQQQQQQ", *second))
+        image.extend(struct.pack("<IIQQQQQQ", *first))
+        struct.pack_into("<Q", image, 32, table)
+        struct.pack_into("<H", image, 56, 3)
+        self.assertEqual(import_audit.elf_program_dynamic_symbols(Path("same.prx"), image)[1], {"beta"})
+
     def test_sectionless_elf_rejects_load_segment_smaller_than_file_size(self):
         symbols = [("alpha", 0, GLOBAL_FUNCTION), ("beta", 1, GLOBAL_FUNCTION)]
         needed = ["libc.prx"]
