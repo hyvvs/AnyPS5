@@ -1,6 +1,7 @@
 #include "prx/libkernel/AppMetadata/include/ParamJsonParser.hpp"
 #include "prx/libkernel/DirectMemory/DirectMemory.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <charconv>
 #include <filesystem>
@@ -258,6 +259,49 @@ JsonValue parseJsonNumber(const std::string& text, std::size_t& position) {
     return value;
 }
 
+std::uint64_t parseDownloadDataSize(const std::string& number) {
+    const bool negative = number.front() == '-';
+    std::size_t position = negative ? 1 : 0;
+    std::string digits;
+    digits.reserve(number.size());
+    while (position < number.size() && number[position] >= '0' && number[position] <= '9')
+        digits.push_back(number[position++]);
+    const std::size_t integralDigits = digits.size();
+    if (position < number.size() && number[position] == '.') {
+        ++position;
+        while (position < number.size() && number[position] >= '0' && number[position] <= '9')
+            digits.push_back(number[position++]);
+    }
+    const std::size_t firstNonZero = digits.find_first_not_of('0');
+    if (firstNonZero == std::string::npos) return 0;
+    if (negative) throw std::runtime_error("param.json downloadDataSize is not a size");
+
+    bool negativeExponent = false;
+    std::size_t exponent = 0;
+    if (position < number.size()) {
+        ++position;
+        if (number[position] == '+' || number[position] == '-') negativeExponent = number[position++] == '-';
+        const std::size_t limit = digits.size() + 20;
+        while (position < number.size()) {
+            const unsigned digit = static_cast<unsigned>(number[position++] - '0');
+            exponent = exponent > (limit - digit) / 10 ? limit : std::min(limit, exponent * 10 + digit);
+        }
+    }
+    const std::size_t wholeDigits = negativeExponent
+        ? (exponent >= integralDigits ? 0 : integralDigits - exponent)
+        : integralDigits + exponent;
+    if (wholeDigits <= firstNonZero) return 0;
+    if (wholeDigits - firstNonZero > 20) throw std::runtime_error("param.json downloadDataSize exceeds uint64 range");
+    std::uint64_t result = 0;
+    for (std::size_t index = firstNonZero; index < wholeDigits; ++index) {
+        const unsigned digit = index < digits.size() ? static_cast<unsigned>(digits[index] - '0') : 0;
+        if (result > (std::numeric_limits<std::uint64_t>::max() - digit) / 10)
+            throw std::runtime_error("param.json downloadDataSize exceeds uint64 range");
+        result = result * 10 + digit;
+    }
+    return result;
+}
+
 JsonValue parseJsonValue(const std::string& text, std::size_t& position, std::size_t depth) {
     skipWhitespace(text, position);
     const char c = peekChar(text, position);
@@ -361,15 +405,8 @@ ParsedParamJson parseParamJson(const std::filesystem::path& paramJsonPath) {
         }
     }
     if (const JsonValue* downloadData = findObjectMember(root, "downloadDataSize")) {
-        if (downloadData->type != JsonType::Number || downloadData->numberValue < 0) throw std::runtime_error("param.json downloadDataSize is not a size");
-        if (downloadData->numberText.find_first_of("-.eE") == std::string::npos) {
-            const auto& number = downloadData->numberText;
-            const auto parsed = std::from_chars(number.data(), number.data() + number.size(), result.downloadDataSizeMiB);
-            if (parsed.ec != std::errc{} || parsed.ptr != number.data() + number.size()) throw std::runtime_error("param.json downloadDataSize exceeds uint64 range");
-        } else {
-            if (downloadData->numberValue >= 0x1p64) throw std::runtime_error("param.json downloadDataSize exceeds uint64 range");
-            result.downloadDataSizeMiB = static_cast<std::uint64_t>(downloadData->numberValue);
-        }
+        if (downloadData->type != JsonType::Number) throw std::runtime_error("param.json downloadDataSize is not a size");
+        result.downloadDataSizeMiB = parseDownloadDataSize(downloadData->numberText);
     }
     for (int index = 0; index < 4; ++index) {
         const std::string key = "userDefinedParam" + std::to_string(index + 1);

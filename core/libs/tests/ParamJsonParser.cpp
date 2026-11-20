@@ -223,7 +223,12 @@ int main() {
             {"9007199254740993", 9007199254740993ull},
             {"18446744073709551614", std::numeric_limits<std::uint64_t>::max() - 1},
             {"18446744073709551615", std::numeric_limits<std::uint64_t>::max()},
-            {"1e3", 1000}, {"1.25", 1}, {"1e01", 10}, {"1e+003", 1000}, {"1e-003", 0}
+            {"1e3", 1000}, {"1.25", 1}, {"1e01", 10}, {"1e+003", 1000}, {"1e-003", 0},
+            {"18446744073709551614.0", std::numeric_limits<std::uint64_t>::max() - 1},
+            {"18446744073709551615.9", std::numeric_limits<std::uint64_t>::max()},
+            {"1.8446744073709551614e19", std::numeric_limits<std::uint64_t>::max() - 1},
+            {"9.007199254740993e15", 9007199254740993ull},
+            {"-0.0", 0}
         };
         for (const auto& [text, expected] : sizes) {
             const auto parsed = ParseSize(path, text);
@@ -231,6 +236,7 @@ int main() {
             Require(parsed.titleId == "PPSA00000" && parsed.title == "Example", "Title metadata changed");
         }
         for (const auto* text : {"18446744073709551616", "18446744073709551617", "1.8446744073709552e19",
+                                 "18446744073709551616.0", "1.8446744073709551616e19",
                                  "1e40", "-1", "-0.5", "true", "null", "\"4096\"", "00", "01", "00.25", "01e3", "01.25"}) {
             bool rejected = false;
             try { ParseSize(path, text); } catch (const std::exception&) { rejected = true; }
