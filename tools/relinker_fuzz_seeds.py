@@ -19,11 +19,22 @@ def without_arguments(function):
     return True
 
 
+def import_fixture(path):
+    missing = object()
+    cached = sys.modules.pop(path.stem, missing)
+    try:
+        return importlib.import_module(path.stem)
+    finally:
+        sys.modules.pop(path.stem, None)
+        if cached is not missing:
+            sys.modules[path.stem] = cached
+
+
 def images():
     sys.path.insert(0, str(TESTS))
     for path in sorted(TESTS.glob("test_*.py")):
         try:
-            module = importlib.import_module(path.stem)
+            module = import_fixture(path)
         except Exception as error:
             print(f"warning: no seeds from {path.name}: it cannot be imported: {error}", file=sys.stderr)
             continue

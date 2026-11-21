@@ -20,6 +20,18 @@ class RelinkerFuzzSeedsTests(unittest.TestCase):
                 code = error.code
         return code, stdout.getvalue(), stderr.getvalue()
 
+    def test_fixture_discovery_uses_the_file_not_a_cached_same_name_module(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory) / "test_fixture.py"
+            fixture.write_text("def fixture():\n    return b'R' * 64\n", encoding="utf-8")
+            unrelated = sys.modules[__name__]
+            with patch.object(relinker_fuzz_seeds, "TESTS", Path(directory)), \
+                    patch.object(unrelated, "fixture", lambda: b"W" * 64, create=True), \
+                    patch.dict(sys.modules, {"test_fixture": unrelated}):
+                self.assertEqual(list(relinker_fuzz_seeds.images()), [("test_fixture-fixture", b"R" * 64)])
+                self.assertIs(sys.modules["test_fixture"], unrelated)
+
     def test_seeds_written_to_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "seeds"
