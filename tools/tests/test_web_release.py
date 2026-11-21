@@ -535,12 +535,27 @@ class TestWebRunnerTests(unittest.TestCase):
             build = Path(tmp) / "build"
             (build / "web").mkdir(parents=True)
             (build / "web/archive.mjs").write_text('\ufefffrom "https://cdn.jsdelivr.net/example/zip.mjs";\n', encoding="utf-8")
-            with patch("subprocess.run"), \
+            with patch("subprocess.run") as run, \
                     patch("urllib.request.urlopen") as mock_url:
                 mock_resp = mock_url.return_value.__enter__.return_value
                 mock_resp.read.return_value = b"zip-content"
                 result = test_web.main(["--build", str(build)])
                 self.assertEqual(result, 0)
+                self.assertEqual(len(run.call_args_list), 5)
+                self.assertTrue(all(call.kwargs.get("timeout") == 30 for call in run.call_args_list))
+
+    def test_main_reports_node_timeout_as_cli_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            build = Path(tmp) / "build"
+            (build / "web").mkdir(parents=True)
+            (build / "web/archive.mjs").write_text('from "https://cdn.jsdelivr.net/example/zip.mjs";\n', encoding="utf-8")
+            expired = subprocess.TimeoutExpired(["node", "--test"], 30)
+            with patch("subprocess.run", side_effect=expired):
+                with self.assertRaises(SystemExit) as error, contextlib.redirect_stderr(io.StringIO()) as err:
+                    test_web.main(["--build", str(build)])
+            self.assertEqual(error.exception.code, 2)
+            self.assertIn("timed out", err.getvalue())
+            self.assertNotIn("Traceback", err.getvalue())
 
     def test_main_reconfigures_streams(self):
         class Stream:

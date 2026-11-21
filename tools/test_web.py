@@ -30,7 +30,7 @@ def main(argv=None):
         subprocess.run(["node", "--test", *(str(ROOT / "demo/web/tests" / name) for name in (
             "worker-manifest.test.mjs",
             "app.test.mjs", "batch.test.mjs", "failure-report.test.mjs", "i18n.test.mjs", "output-directory.test.mjs"
-        ) + ("directory-writer.test.mjs",))], check=True)
+        ) + ("directory-writer.test.mjs",))], check=True, timeout=30)
         with tempfile.TemporaryDirectory(prefix="anyps5-web-") as directory:
             fixture = Path(directory)
             (fixture / "main.elf").write_bytes(main_fixture())
@@ -45,11 +45,11 @@ def main(argv=None):
                 library.write_bytes(response.read())
             environment = dict(os.environ, ANYPS5_TEST_ZIP_URL=url, ANYPS5_TEST_ZIP_PATH=library.as_uri())
             web = str(build / "web")
-            subprocess.run(["node", str(ROOT / "demo/web/tests/archive-root.test.mjs"), web], env=environment, check=True)
-            subprocess.run(["node", str(ROOT / "demo/web/tests/archive-windows.test.mjs"), web], env=environment, check=True)
-            subprocess.run(["node", str(ROOT / "demo/web/tests/archive-reserved.test.mjs"), web], env=environment, check=True)
-            subprocess.run(["node", str(ROOT / "demo/web/tests/archive.test.mjs"), web, str(fixture)], env=environment, check=True)
-    except (subprocess.CalledProcessError, urllib.error.URLError, OSError, UnicodeDecodeError) as error:
+            subprocess.run(["node", str(ROOT / "demo/web/tests/archive-root.test.mjs"), web], env=environment, check=True, timeout=30)
+            subprocess.run(["node", str(ROOT / "demo/web/tests/archive-windows.test.mjs"), web], env=environment, check=True, timeout=30)
+            subprocess.run(["node", str(ROOT / "demo/web/tests/archive-reserved.test.mjs"), web], env=environment, check=True, timeout=30)
+            subprocess.run(["node", str(ROOT / "demo/web/tests/archive.test.mjs"), web, str(fixture)], env=environment, check=True, timeout=30)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, urllib.error.URLError, OSError, UnicodeDecodeError) as error:
         parser.error(str(error))
     return 0
 
